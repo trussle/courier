@@ -1,0 +1,2 @@
+# snoopy
+Message egress service
