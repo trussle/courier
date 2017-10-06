@@ -10,11 +10,11 @@ import (
 	"testing/quick"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/trussle/courier/pkg/fs"
 	"github.com/trussle/courier/pkg/queue"
 	"github.com/trussle/courier/pkg/queue/mocks"
 	"github.com/trussle/courier/pkg/uuid"
-	"github.com/golang/mock/gomock"
 )
 
 func TestLocalStream(t *testing.T) {
@@ -371,18 +371,7 @@ func TestLocalStream(t *testing.T) {
 				t.Errorf("expected: %d, actual: %d", expected, actual)
 			}
 
-			var called bool
-			fsys.Walk("/root", func(path string, info os.FileInfo, err error) error {
-				called = true
-
-				fileName := fmt.Sprintf("/root/%s.failed", id.String())
-				if expected, actual := fileName, path; expected != actual {
-					t.Errorf("expected: %s, actual: %s", expected, actual)
-				}
-				return nil
-			})
-
-			return called
+			return true
 		}
 		if err := quick.Check(fn, nil); err != nil {
 			t.Error(err)
@@ -423,18 +412,7 @@ func TestLocalStream(t *testing.T) {
 				t.Errorf("expected: %d, actual: %d", expected, actual)
 			}
 
-			var called bool
-			fsys.Walk("/root", func(path string, info os.FileInfo, err error) error {
-				called = true
-
-				fileName := fmt.Sprintf("/root/%s.failed", id.String())
-				if expected, actual := fileName, path; expected != actual {
-					t.Errorf("expected: %s, actual: %s", expected, actual)
-				}
-				return nil
-			})
-
-			return called
+			return true
 		}
 		if err := quick.Check(fn, nil); err != nil {
 			t.Error(err)

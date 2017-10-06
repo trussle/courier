@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/trussle/courier/pkg/fs"
 	"github.com/trussle/courier/pkg/queue"
 	"github.com/trussle/courier/pkg/uuid"
-	"github.com/pkg/errors"
 )
 
 //Extension describe differing types of persisted queued types
@@ -188,6 +188,8 @@ func (s *localStream) resetVia(input *Transaction, reason Extension) error {
 			return nil
 		}
 
+		fileName := filepath.Join(s.root, segment.ID().String())
+
 		switch reason {
 		case Failed:
 			if _, err := segment.Failed(ids); err != nil {
@@ -197,24 +199,23 @@ func (s *localStream) resetVia(input *Transaction, reason Extension) error {
 			if _, err := segment.Commit(ids); err != nil {
 				return err
 			}
-		}
 
-		fileName := filepath.Join(s.root, segment.ID().String())
-		file, err := generateFile(s.fsys, fileName, reason)
-		if err != nil {
-			return err
-		}
-
-		defer file.Close()
-
-		for _, v := range records {
-			if _, err := file.Write(append(v.Body, '\n')); err != nil {
+			file, err := generateFile(s.fsys, fileName, reason)
+			if err != nil {
 				return err
 			}
-		}
 
-		if err := file.Sync(); err != nil {
-			return err
+			defer file.Close()
+
+			for _, v := range records {
+				if _, err := file.Write(append(v.Body, '\n')); err != nil {
+					return err
+				}
+			}
+
+			if err := file.Sync(); err != nil {
+				return err
+			}
 		}
 
 		return s.fsys.Remove(fmt.Sprintf("%s%s", fileName, Active.Ext()))
