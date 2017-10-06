@@ -6,6 +6,10 @@ Courier repository
 
 ## Badges
 
+[![travis-ci](https://travis-ci.org/trussle/courier.svg?branch=master)](https://travis-ci.org/trussle/courier)
+[![Coverage Status](https://coveralls.io/repos/github/trussle/courier/badge.svg?branch=master)](https://coveralls.io/github/trussle/courier?branch=master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/trussle/courier)](https://goreportcard.com/report/github.com/trussle/courier)
+
 ## Introduction
 
 ## Setup
