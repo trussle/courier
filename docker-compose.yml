@@ -1,0 +1,14 @@
+version: '2'
+
+services:
+  courier:
+    image: golang:1.8-alpine
+    volumes:
+      - ./:/go/src/github.com/trussle/courier
+    working_dir: /go/src/github.com/trussle/courier
+    environment:
+      AWS_ID: "${AWS_ID}"
+      AWS_SECRET: "${AWS_SECRET}"
+      AWS_REGION: "${AWS_REGION}"
+      AWS_TOKEN: "${AWS_TOKEN}"
+      AWS_QUEUE: "${AWS_QUEUE}"
