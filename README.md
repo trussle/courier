@@ -12,6 +12,51 @@ Courier repository
 
 ## Introduction
 
+Courier is a SQS message ingester that egresses individual messages to a http
+client. Each message will be pulled of the queue (in batches or individually,
+depending on configuration) and then stored and batched before sending to 
+downstream clients.
+
+This does not provide a full audit trail of every message, rather it audit's 
+every successful message that has been transacted through the pipeline.
+
+Consider the following:
+
+```
+                                                                                +--------------+
+                                                                                |              |
+                                                                            +--->  Client N+1  |
+                          +----------------+                                |   |              |
+                          |                |                                |   +--------------+
++-----------------+   +--->  Consumer N+1  +-----+                          |
+|                 +---+   |                |     |     +-----------------+  |   +--------------+
+|  SQS Messaging  |       +----------------+     |     |                 |  |   |              |
+|      Queue      |                              +--+-->  Load Balancer  +------>  Client N+1  |
+|                 +---+   +----------------+     |  |  |                 |  |   |              |
++-----------------+   |   |                |     |  |  +-----------------+  |   +--------------+
+                      +--->  Consumer N+1  +-----+  |                       |
+                          |                |        |                       |   +--------------+
+                          +----------------+        +-----------+           |   |              |
+                                                                |           +--->  Client N+1  |
+                                                                |               |              |
+                                                                |               +--------------+
+                                                      +---------v---------+
+                                                      |                   |
+                                                      |  Auditing Output  |
+                                                      |    Firehose/FS    |
+                                                      |                   |
+                                                      +-------------------+
+```
+
+It expects that you have some sort of load balancing system in places, as it's
+not hard to run tens of thousands of messages from a queue towards the http 
+client, so some thought should be provided as such.
+
+Rate-limiting of messages can be controlled by reducing the amount of consumers
+for now, but in the future it would be easy to envision a configurable component
+to do so.
+
+
 ## Setup
 
 ### Local development

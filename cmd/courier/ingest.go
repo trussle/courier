@@ -25,8 +25,8 @@ import (
 
 const (
 	defaultQueue      = "remote"
-	defaultStream     = "local"
-	defaultFilesystem = "local"
+	defaultStream     = "virtual"
+	defaultFilesystem = "nop"
 
 	defaultRootDir = "bin"
 
@@ -37,7 +37,7 @@ const (
 	defaultAWSQueue  = ""
 
 	defaultRecipientURL        = ""
-	defaultSegmentConsumers    = 20
+	defaultSegmentConsumers    = 2
 	defaultMaxNumberOfMessages = 5
 	defaultVisibilityTimeout   = "1s"
 	defaultTargetBatchSize     = 10
