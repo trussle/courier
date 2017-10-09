@@ -14,6 +14,8 @@ all: install
 install:
 	go get github.com/Masterminds/glide
 	go get github.com/mattn/goveralls
+	go get github.com/golang/mock/mockgen
+	go get github.com/prometheus/client_golang/prometheus
 	glide install
 
 .PHONY: build
@@ -23,17 +25,17 @@ dist/courier:
 	go build -o dist/courier ${PATH_COURIER}/cmd/courier
 
 pkg/metrics/mocks/metrics.go:
-	mockgen -package=mocks -destination=pkg/metrics/mocks/metrics.go ${PATH_TRANSFORMER}/pkg/metrics Gauge,HistogramVec,Counter
+	mockgen -package=mocks -destination=pkg/metrics/mocks/metrics.go ${PATH_COURIER}/pkg/metrics Gauge,HistogramVec,Counter
 	$(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/metrics/mocks/metrics.go
 
 pkg/metrics/mocks/observer.go:
 	mockgen -package=mocks -destination=pkg/metrics/mocks/observer.go github.com/prometheus/client_golang/prometheus Observer
 
 pkg/queue/mocks/queue.go:
-	mockgen -package=mocks -destination=pkg/queue/mocks/queue.go ${PATH_TRANSFORMER}/pkg/queue Queue,Segment
+	mockgen -package=mocks -destination=pkg/queue/mocks/queue.go ${PATH_COURIER}/pkg/queue Queue,Segment
 
 pkg/stream/mocks/stream.go:
-	mockgen -package=mocks -destination=pkg/stream/mocks/stream.go ${PATH_TRANSFORMER}/pkg/stream Stream
+	mockgen -package=mocks -destination=pkg/stream/mocks/stream.go ${PATH_COURIER}/pkg/stream Stream
 	$(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/stream/mocks/stream.go
 
 .PHONY: build-mocks
