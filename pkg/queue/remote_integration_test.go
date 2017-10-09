@@ -202,11 +202,11 @@ func TestRemoteQueue_Integration(t *testing.T) {
 
 	t.Run("change visibility with no timeout", func(t *testing.T) {
 		config, err := BuildConfig(
-			WithRegion(GetEnv("AWS_REGION", defaultAWSRegion)),
-			WithID(GetEnv("AWS_ID", defaultAWSID)),
-			WithSecret(GetEnv("AWS_SECRET", defaultAWSSecret)),
-			WithToken(GetEnv("AWS_TOKEN", defaultAWSToken)),
-			WithQueue(GetEnv("AWS_QUEUE", defaultAWSQueue)),
+			WithRegion(GetEnv("AWS_SQS_REGION", defaultAWSRegion)),
+			WithID(GetEnv("AWS_SQS_ID", defaultAWSID)),
+			WithSecret(GetEnv("AWS_SQS_SECRET", defaultAWSSecret)),
+			WithToken(GetEnv("AWS_SQS_TOKEN", defaultAWSToken)),
+			WithQueue(GetEnv("AWS_SQS_QUEUE", defaultAWSQueue)),
 			WithMaxNumberOfMessages(10),
 			WithVisibilityTimeout(0),
 		)

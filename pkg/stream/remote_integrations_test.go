@@ -1,9 +1,9 @@
 // +build integration
 
-package queue
+package stream
 
 import (
-	"math/rand"
+	"syscall"
 	"testing"
 	"time"
 
@@ -21,7 +21,7 @@ const (
 func TestRemoteStream_Integration(t *testing.T) {
 	// Don't run this in parallel
 
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	// rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	config, err := BuildConfig(
 		WithRegion(GetEnv("AWS_FIREHOSE_REGION", defaultAWSRegion)),
@@ -46,4 +46,12 @@ func TestRemoteStream_Integration(t *testing.T) {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
 	})
+}
+
+func GetEnv(key string, defaultValue string) (value string) {
+	var ok bool
+	if value, ok = syscall.Getenv(key); ok {
+		return
+	}
+	return defaultValue
 }
