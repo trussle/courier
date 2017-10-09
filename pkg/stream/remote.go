@@ -34,6 +34,11 @@ type remoteStream struct {
 	logger      log.Logger
 }
 
+// NewRemoteStream creates a new remote peer that abstracts over a SQS queue.
+func NewRemoteStream(config *RemoteConfig, logger log.Logger) (Stream, error) {
+	return newRemoteStream(config, logger)
+}
+
 // NewRemoteStream creates a new Stream with a size and age to know when a
 // Stream is at a certain capacity
 func newRemoteStream(config *RemoteConfig, logger log.Logger) (*remoteStream, error) {
