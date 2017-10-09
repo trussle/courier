@@ -20,6 +20,7 @@ import:
   - package: github.com/golang/mock/gomock
   - package: github.com/SimonRichardson/betwixt
   - package: github.com/gorilla/mux
+  - package: github.com/trussle/fsys
   - package: github.com/aws/aws-sdk-go
     subpackages:
     - aws

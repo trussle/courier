@@ -5,9 +5,9 @@ import (
 	"testing/quick"
 	"time"
 
-	"github.com/trussle/courier/pkg/fs"
 	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
+	"github.com/trussle/fsys"
 )
 
 func TestBuildingQueue(t *testing.T) {
@@ -19,7 +19,7 @@ func TestBuildingQueue(t *testing.T) {
 				With(name),
 				WithTargetAge(time.Second),
 				WithTargetSize(1),
-				WithFilesystem(fs.NewNopFilesystem()),
+				WithFilesystem(fsys.NewNopFilesystem()),
 				WithRootDir("/root"),
 			)
 			if err != nil {

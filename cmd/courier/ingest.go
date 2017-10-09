@@ -10,17 +10,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/trussle/courier/pkg/consumer"
-	"github.com/trussle/courier/pkg/fs"
-	h "github.com/trussle/courier/pkg/http"
-	"github.com/trussle/courier/pkg/queue"
-	"github.com/trussle/courier/pkg/status"
-	"github.com/trussle/courier/pkg/stream"
 	"github.com/SimonRichardson/gexec"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/trussle/courier/pkg/consumer"
+	h "github.com/trussle/courier/pkg/http"
+	"github.com/trussle/courier/pkg/queue"
+	"github.com/trussle/courier/pkg/status"
+	"github.com/trussle/courier/pkg/stream"
+	"github.com/trussle/fsys"
 )
 
 const (
@@ -157,14 +157,14 @@ func runIngest(args []string) error {
 	level.Debug(logger).Log("API", fmt.Sprintf("%s://%s", apiNetwork, apiAddress))
 
 	// Filesystem setup.
-	fysConfig, err := fs.Build(
-		fs.With(*filesystemType),
+	fysConfig, err := fsys.Build(
+		fsys.With(*filesystemType),
 	)
 	if err != nil {
 		return errors.Wrap(err, "filesystem config")
 	}
 
-	fsys, err := fs.New(fysConfig)
+	fs, err := fsys.New(fysConfig)
 	if err != nil {
 		return errors.Wrap(err, "filesystem")
 	}
@@ -225,7 +225,7 @@ func runIngest(args []string) error {
 			consumerRootDir := filepath.Join(*rootDir, fmt.Sprintf("segment-%04d", i))
 			streamConfig, err := stream.Build(
 				stream.With(*streamType),
-				stream.WithFilesystem(fsys),
+				stream.WithFilesystem(fs),
 				stream.WithRootDir(consumerRootDir),
 				stream.WithTargetSize(*targetBatchSize),
 				stream.WithTargetAge(age),

@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/trussle/courier/pkg/fs"
 	"github.com/trussle/courier/pkg/queue"
 	"github.com/trussle/courier/pkg/queue/mocks"
 	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/fsys"
 )
 
 func TestLocalStream(t *testing.T) {
@@ -23,7 +23,7 @@ func TestLocalStream(t *testing.T) {
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	t.Run("create returns nil", func(t *testing.T) {
-		fsys := fs.NewVirtualFilesystem()
+		fsys := fsys.NewVirtualFilesystem()
 		_, err := newLocalStream(fsys, "/root", 1, time.Second)
 
 		if expected, actual := true, err == nil; expected != actual {
@@ -32,7 +32,7 @@ func TestLocalStream(t *testing.T) {
 	})
 
 	t.Run("new stream returns correct size", func(t *testing.T) {
-		fsys := fs.NewVirtualFilesystem()
+		fsys := fsys.NewVirtualFilesystem()
 		stream, err := newLocalStream(fsys, "/root", 1, time.Second)
 
 		if expected, actual := true, err == nil; expected != actual {
@@ -49,7 +49,7 @@ func TestLocalStream(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			fsys := fs.NewVirtualFilesystem()
+			fsys := fsys.NewVirtualFilesystem()
 			stream, err := newLocalStream(fsys, "/root", 1, time.Second)
 
 			if expected, actual := true, err == nil; expected != actual {
@@ -92,7 +92,7 @@ func TestLocalStream(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			fsys := fs.NewVirtualFilesystem()
+			fsys := fsys.NewVirtualFilesystem()
 			stream, err := newLocalStream(fsys, "/root", 1, time.Second)
 
 			if expected, actual := true, err == nil; expected != actual {
@@ -134,7 +134,7 @@ func TestLocalStream(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			fsys := fs.NewVirtualFilesystem()
+			fsys := fsys.NewVirtualFilesystem()
 			stream, err := newLocalStream(fsys, "/root", 1, time.Second)
 
 			if expected, actual := true, err == nil; expected != actual {
@@ -165,7 +165,7 @@ func TestLocalStream(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		fsys := fs.NewVirtualFilesystem()
+		fsys := fsys.NewVirtualFilesystem()
 		stream, err := newLocalStream(fsys, "/root", 1, time.Second)
 
 		if expected, actual := true, err == nil; expected != actual {
@@ -190,7 +190,7 @@ func TestLocalStream(t *testing.T) {
 			segment.EXPECT().ID().Return(uuid.MustNew(rnd))
 			segment.EXPECT().Walk(Walk(record)).Return(nil).Times(2)
 
-			fsys := fs.NewVirtualFilesystem()
+			fsys := fsys.NewVirtualFilesystem()
 			stream, err := newLocalStream(fsys, "/root", 1, time.Second)
 
 			if expected, actual := true, err == nil; expected != actual {
@@ -242,7 +242,7 @@ func TestLocalStream(t *testing.T) {
 			segment.EXPECT().Walk(Walk(record)).Return(nil).Times(2)
 			segment.EXPECT().Commit(CompareUUIDs(ids)).Return(queue.Result{}, nil)
 
-			fsys := fs.NewVirtualFilesystem()
+			fsys := fsys.NewVirtualFilesystem()
 			stream, err := newLocalStream(fsys, "/root", 1, time.Second)
 
 			if expected, actual := true, err == nil; expected != actual {
@@ -297,7 +297,7 @@ func TestLocalStream(t *testing.T) {
 			segment.EXPECT().Walk(Walk(record)).Return(nil).Times(3)
 			segment.EXPECT().Commit(CompareUUIDs(ids)).Return(queue.Result{}, nil)
 
-			fsys := fs.NewVirtualFilesystem()
+			fsys := fsys.NewVirtualFilesystem()
 			stream, err := newLocalStream(fsys, "/root", 1, time.Second)
 
 			if expected, actual := true, err == nil; expected != actual {
@@ -349,7 +349,7 @@ func TestLocalStream(t *testing.T) {
 			segment.EXPECT().Walk(Walk(record)).Return(nil).Times(2)
 			segment.EXPECT().Failed(CompareUUIDs(ids)).Return(queue.Result{}, nil)
 
-			fsys := fs.NewVirtualFilesystem()
+			fsys := fsys.NewVirtualFilesystem()
 			stream, err := newLocalStream(fsys, "/root", 1, time.Second)
 
 			if expected, actual := true, err == nil; expected != actual {
@@ -393,7 +393,7 @@ func TestLocalStream(t *testing.T) {
 			segment.EXPECT().Walk(Walk(record)).Return(nil).Times(3)
 			segment.EXPECT().Failed(CompareUUIDs(ids)).Return(queue.Result{}, nil)
 
-			fsys := fs.NewVirtualFilesystem()
+			fsys := fsys.NewVirtualFilesystem()
 			stream, err := newLocalStream(fsys, "/root", 1, time.Second)
 
 			if expected, actual := true, err == nil; expected != actual {
@@ -489,7 +489,7 @@ func TestModifyExtension(t *testing.T) {
 }
 
 func TestGenerateFile(t *testing.T) {
-	fsys := fs.NewVirtualFilesystem()
+	fsys := fsys.NewVirtualFilesystem()
 
 	if _, err := generateFile(fsys, "/root", Active); err != nil {
 		t.Error(err)
@@ -511,7 +511,7 @@ func TestGenerateFile(t *testing.T) {
 }
 
 func TestRecoverSegments(t *testing.T) {
-	fsys := fs.NewVirtualFilesystem()
+	fsys := fsys.NewVirtualFilesystem()
 	fsys.Create("/root/filename.active")
 
 	if err := recoverSegments(fsys, "/root"); err != nil {
