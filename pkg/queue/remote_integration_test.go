@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trussle/courier/pkg/uuid"
 	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
+	"github.com/trussle/courier/pkg/uuid"
 )
 
 const (
@@ -46,18 +46,6 @@ func TestRemoteQueue_Integration(t *testing.T) {
 		}
 
 		if expected, actual := false, queue == nil; expected != actual {
-			t.Errorf("expected: %t, actual: %t", expected, actual)
-		}
-	})
-
-	t.Run("reset", func(t *testing.T) {
-		queue, err := NewRemoteQueue(config, log.NewNopLogger())
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = queue.Reset()
-		if expected, actual := true, err == nil; expected != actual {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
 	})
