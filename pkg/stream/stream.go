@@ -86,11 +86,12 @@ func (t *Transaction) All() bool {
 
 // Config encapsulates the requirements for generating a Stream
 type Config struct {
-	name string
-	fsys fsys.Filesystem
-	root string
-	size int
-	age  time.Duration
+	name         string
+	remoteConfig *RemoteConfig
+	fsys         fsys.Filesystem
+	root         string
+	size         int
+	age          time.Duration
 }
 
 // Option defines a option for generating a stream Config
@@ -113,6 +114,14 @@ func Build(opts ...Option) (*Config, error) {
 func With(name string) Option {
 	return func(config *Config) error {
 		config.name = name
+		return nil
+	}
+}
+
+// WithConfig adds a remote queue config to the configuration
+func WithConfig(remoteConfig *RemoteConfig) Option {
+	return func(config *Config) error {
+		config.remoteConfig = remoteConfig
 		return nil
 	}
 }
@@ -152,6 +161,8 @@ func WithTargetAge(age time.Duration) Option {
 // New returns a new stream
 func New(config *Config, logger log.Logger) (stream Stream, err error) {
 	switch config.name {
+	case "remote":
+		stream, err = newRemoteStream(config.remoteConfig, logger)
 	case "local":
 		stream, err = newLocalStream(config.fsys, config.root, config.size, config.age)
 	case "virtual":

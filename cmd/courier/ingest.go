@@ -30,11 +30,17 @@ const (
 
 	defaultRootDir = "bin"
 
-	defaultAWSID     = ""
-	defaultAWSSecret = ""
-	defaultAWSToken  = ""
-	defaultAWSRegion = "eu-west-1"
-	defaultAWSQueue  = ""
+	defaultAWSSQSID     = ""
+	defaultAWSSQSSecret = ""
+	defaultAWSSQSToken  = ""
+	defaultAWSSQSRegion = "eu-west-1"
+	defaultAWSSQSQueue  = ""
+
+	defaultAWSFirehoseID     = ""
+	defaultAWSFirehoseSecret = ""
+	defaultAWSFirehoseToken  = ""
+	defaultAWSFirehoseRegion = "eu-west-1"
+	defaultAWSFirehoseStream = ""
 
 	defaultRecipientURL        = ""
 	defaultSegmentConsumers    = 2
@@ -53,11 +59,17 @@ func runIngest(args []string) error {
 		debug   = flagset.Bool("debug", false, "debug logging")
 		apiAddr = flagset.String("api", defaultAPIAddr, "listen address for ingest API")
 
-		awsID     = flagset.String("aws.id", defaultAWSID, "AWS configuration id")
-		awsSecret = flagset.String("aws.secret", defaultAWSSecret, "AWS configuration secret")
-		awsToken  = flagset.String("aws.token", defaultAWSToken, "AWS configuration token")
-		awsRegion = flagset.String("aws.region", defaultAWSRegion, "AWS configuration region")
-		awsQueue  = flagset.String("aws.queue", defaultAWSQueue, "AWS configuration queue")
+		awsSQSID     = flagset.String("aws.sqs.id", defaultAWSSQSID, "AWS configuration id")
+		awsSQSSecret = flagset.String("aws.sqs.secret", defaultAWSSQSSecret, "AWS configuration secret")
+		awsSQSToken  = flagset.String("aws.sqs.token", defaultAWSSQSToken, "AWS configuration token")
+		awsSQSRegion = flagset.String("aws.sqs.region", defaultAWSSQSRegion, "AWS configuration region")
+		awsSQSQueue  = flagset.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
+
+		awsFirehoseID     = flagset.String("aws.firehose.id", defaultAWSFirehoseID, "AWS configuration id")
+		awsFirehoseSecret = flagset.String("aws.firehose.secret", defaultAWSFirehoseSecret, "AWS configuration secret")
+		awsFirehoseToken  = flagset.String("aws.firehose.token", defaultAWSFirehoseToken, "AWS configuration token")
+		awsFirehoseRegion = flagset.String("aws.firehose.region", defaultAWSFirehoseRegion, "AWS configuration region")
+		awsFirehoseStream = flagset.String("aws.firehose.queue", defaultAWSFirehoseStream, "AWS configuration stream")
 
 		queueType      = flagset.String("queue", defaultQueue, "type of queue to use (remote, virtual, nop)")
 		streamType     = flagset.String("stream", defaultStream, "type of stream to use (local, virtual)")
@@ -156,6 +168,12 @@ func runIngest(args []string) error {
 	}
 	level.Debug(logger).Log("API", fmt.Sprintf("%s://%s", apiNetwork, apiAddress))
 
+	// Timeout duration setup.
+	visibilityTimeoutDuration, err := time.ParseDuration(*visibilityTimeout)
+	if err != nil {
+		return err
+	}
+
 	// Filesystem setup.
 	fysConfig, err := fsys.Build(
 		fsys.With(*filesystemType),
@@ -167,6 +185,20 @@ func runIngest(args []string) error {
 	fs, err := fsys.New(fysConfig)
 	if err != nil {
 		return errors.Wrap(err, "filesystem")
+	}
+
+	// Firehose setup.
+	streamRemoteConfig, err := stream.BuildConfig(
+		stream.WithID(*awsFirehoseID),
+		stream.WithSecret(*awsFirehoseSecret),
+		stream.WithToken(*awsFirehoseToken),
+		stream.WithRegion(*awsFirehoseRegion),
+		stream.WithStream(*awsFirehoseStream),
+		stream.WithMaxNumberOfMessages(int(*maxNumberOfMessages)),
+		stream.WithVisibilityTimeout(visibilityTimeoutDuration),
+	)
+	if err != nil {
+		return errors.Wrap(err, "queue remote config")
 	}
 
 	// Create the HTTP clients we'll use for various purposes.
@@ -184,18 +216,13 @@ func runIngest(args []string) error {
 		},
 	}
 
-	visibilityTimeoutDuration, err := time.ParseDuration(*visibilityTimeout)
-	if err != nil {
-		return err
-	}
-
 	// Configuration for the queue
-	remoteConfig, err := queue.BuildConfig(
-		queue.WithID(*awsID),
-		queue.WithSecret(*awsSecret),
-		queue.WithToken(*awsToken),
-		queue.WithRegion(*awsRegion),
-		queue.WithQueue(*awsQueue),
+	queueRemoteConfig, err := queue.BuildConfig(
+		queue.WithID(*awsSQSID),
+		queue.WithSecret(*awsSQSSecret),
+		queue.WithToken(*awsSQSToken),
+		queue.WithRegion(*awsSQSRegion),
+		queue.WithQueue(*awsSQSQueue),
 		queue.WithMaxNumberOfMessages(int64(*maxNumberOfMessages)),
 		queue.WithVisibilityTimeout(visibilityTimeoutDuration),
 	)
@@ -205,7 +232,7 @@ func runIngest(args []string) error {
 
 	queueConfig, err := queue.Build(
 		queue.With(*queueType),
-		queue.WithConfig(remoteConfig),
+		queue.WithConfig(queueRemoteConfig),
 	)
 	if err != nil {
 		return errors.Wrap(err, "queue config")
@@ -222,9 +249,11 @@ func runIngest(args []string) error {
 	gexec.Block(g)
 	{
 		for i := 0; i < *segmentConsumers; i++ {
+
 			consumerRootDir := filepath.Join(*rootDir, fmt.Sprintf("segment-%04d", i))
 			streamConfig, err := stream.Build(
 				stream.With(*streamType),
+				stream.WithConfig(streamRemoteConfig),
 				stream.WithFilesystem(fs),
 				stream.WithRootDir(consumerRootDir),
 				stream.WithTargetSize(*targetBatchSize),
