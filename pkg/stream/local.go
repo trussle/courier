@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/trussle/courier/pkg/fs"
 	"github.com/trussle/courier/pkg/queue"
 	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/fsys"
 )
 
 //Extension describe differing types of persisted queued types
@@ -41,7 +41,7 @@ const (
 type localStream struct {
 	randSource  *rand.Rand
 	root        string
-	fsys        fs.Filesystem
+	fsys        fsys.Filesystem
 	active      []queue.Segment
 	activeSince time.Time
 	targetSize  int
@@ -50,7 +50,7 @@ type localStream struct {
 
 // NewLocalStream creates a new Stream with a size and age to know when a
 // Stream is at a certain capacity
-func newLocalStream(fsys fs.Filesystem, root string, size int, age time.Duration) (*localStream, error) {
+func newLocalStream(fsys fsys.Filesystem, root string, size int, age time.Duration) (*localStream, error) {
 	if err := fsys.MkdirAll(root); err != nil {
 		return nil, errors.Wrapf(err, "creating path %s", root)
 	}
@@ -236,13 +236,13 @@ func contains(ids []uuid.UUID, id uuid.UUID) bool {
 	return false
 }
 
-func generateFile(fsys fs.Filesystem, root string, ext Extension) (fs.File, error) {
+func generateFile(fsys fsys.Filesystem, root string, ext Extension) (fsys.File, error) {
 	filename := fmt.Sprintf("%s%s", root, ext.Ext())
 	return fsys.Create(filename)
 }
 
 // Recover any active segments and make them failed segments.
-func recoverSegments(filesys fs.Filesystem, root string) error {
+func recoverSegments(filesys fsys.Filesystem, root string) error {
 	var toRename []string
 	filesys.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {

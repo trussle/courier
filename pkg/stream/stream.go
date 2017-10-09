@@ -3,11 +3,11 @@ package stream
 import (
 	"time"
 
-	"github.com/trussle/courier/pkg/fs"
-	"github.com/trussle/courier/pkg/queue"
-	"github.com/trussle/courier/pkg/uuid"
 	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
+	"github.com/trussle/courier/pkg/queue"
+	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/fsys"
 )
 
 // Stream defines a queue of segments that are to be replayed on.
@@ -87,7 +87,7 @@ func (t *Transaction) All() bool {
 // Config encapsulates the requirements for generating a Stream
 type Config struct {
 	name string
-	fsys fs.Filesystem
+	fsys fsys.Filesystem
 	root string
 	size int
 	age  time.Duration
@@ -118,7 +118,7 @@ func With(name string) Option {
 }
 
 // WithFilesystem adds a type of stream to use for the configuration.
-func WithFilesystem(fsys fs.Filesystem) Option {
+func WithFilesystem(fsys fsys.Filesystem) Option {
 	return func(config *Config) error {
 		config.fsys = fsys
 		return nil

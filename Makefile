@@ -56,6 +56,10 @@ clean: FORCE
 
 FORCE:
 
+.PHONY: unit-tests
+unit-tests:
+	docker-compose run courier go test -v ./cmd/... ./pkg/...
+
 .PHONY: integration-tests
 integration-tests:
 	docker-compose run courier go test -v -tags=integration ./cmd/... ./pkg/...
