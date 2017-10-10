@@ -103,7 +103,12 @@ func (l *virtualStream) resetVia(input *Transaction, reason Extension) error {
 	return nil
 }
 
-func intersection(segments []queue.Segment, input *Transaction) (union, difference map[queue.Segment][]uuid.UUID) {
+func intersection(segments []queue.Segment, input *Transaction) (map[queue.Segment][]uuid.UUID, map[queue.Segment][]uuid.UUID) {
+	var (
+		union      = make(map[queue.Segment][]uuid.UUID)
+		difference = make(map[queue.Segment][]uuid.UUID)
+	)
+
 	for _, segment := range segments {
 
 		// Everything is a union, there are no differences
@@ -115,6 +120,7 @@ func intersection(segments []queue.Segment, input *Transaction) (union, differen
 				continue
 			}
 
+			// We're done here, move on!
 			continue
 		}
 
