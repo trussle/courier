@@ -77,24 +77,9 @@ func (l *virtualStream) Failed(input *Transaction) error {
 }
 
 func (l *virtualStream) resetVia(input *Transaction, reason Extension) error {
-	var segments []queue.Segment
-	for _, segment := range l.active {
-		var ids []uuid.UUID
-		if input.All() {
-			if err := segment.Walk(func(record queue.Record) error {
-				ids = append(ids, record.ID)
-				return nil
-			}); err != nil {
-				continue
-			}
-		} else {
-			var ok bool
-			if ids, ok = input.Get(segment.ID()); !ok {
-				segments = append(segments, segment)
-				continue
-			}
-		}
+	union, difference := intersection(l.active, input)
 
+	for segment, ids := range union {
 		switch reason {
 		case Failed:
 			if _, err := segment.Failed(ids); err != nil {
@@ -107,8 +92,52 @@ func (l *virtualStream) resetVia(input *Transaction, reason Extension) error {
 		}
 	}
 
+	var segments []queue.Segment
+	for segment := range difference {
+		segments = append(segments, segment)
+	}
+
 	l.active = segments
 	l.activeSince = time.Time{}
 
 	return nil
+}
+
+func intersection(segments []queue.Segment, input *Transaction) (union, difference map[queue.Segment][]uuid.UUID) {
+	for _, segment := range segments {
+
+		// Everything is a union, there are no differences
+		if input.All() {
+			if err := segment.Walk(func(record queue.Record) error {
+				union[segment] = append(union[segment], record.ID)
+				return nil
+			}); err != nil {
+				continue
+			}
+
+			continue
+		}
+
+		// Find union and differences from the input
+		potential, ok := input.Get(segment.ID())
+		if err := segment.Walk(func(record queue.Record) error {
+			// Nothing found at all, so push everything to difference
+			if !ok {
+				difference[segment] = append(difference[segment], record.ID)
+				return nil
+			}
+
+			// If something found and is found in potential haystack add it to the
+			// union.
+			if contains(potential, record.ID) {
+				union[segment] = append(union[segment], record.ID)
+			} else {
+				difference[segment] = append(union[segment], record.ID)
+			}
+			return nil
+		}); err != nil {
+			continue
+		}
+	}
+	return
 }

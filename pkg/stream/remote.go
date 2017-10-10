@@ -12,7 +12,6 @@ import (
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
 	"github.com/trussle/courier/pkg/queue"
-	"github.com/trussle/courier/pkg/uuid"
 )
 
 // RemoteConfig creates a configuration to create a RemoteStream.
@@ -121,31 +120,16 @@ func (l *remoteStream) Failed(input *Transaction) error {
 }
 
 func (l *remoteStream) resetVia(input *Transaction, reason Extension) error {
-	var segments []queue.Segment
-	for _, segment := range l.active {
-		var ids []uuid.UUID
-		if input.All() {
-			if err := segment.Walk(func(record queue.Record) error {
-				ids = append(ids, record.ID)
-				return nil
-			}); err != nil {
-				continue
-			}
-		} else {
-			var ok bool
-			if ids, ok = input.Get(segment.ID()); !ok {
-				segments = append(segments, segment)
-				continue
-			}
-		}
+	union, difference := intersection(l.active, input)
 
+	for segment, ids := range union {
 		switch reason {
 		case Failed:
 			if _, err := segment.Failed(ids); err != nil {
 				return err
 			}
-
 		case Flushed:
+
 			// Serialize all the record data
 			var data [][]byte
 			if err := segment.Walk(func(record queue.Record) error {
@@ -178,6 +162,11 @@ func (l *remoteStream) resetVia(input *Transaction, reason Extension) error {
 				level.Warn(l.logger).Log("state", "flushing", "err", err.Error())
 			}
 		}
+	}
+
+	var segments []queue.Segment
+	for segment := range difference {
+		segments = append(segments, segment)
 	}
 
 	l.active = segments
