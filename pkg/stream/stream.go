@@ -20,10 +20,10 @@ type Stream interface {
 	Walk(func(queue.Segment) error) error
 
 	// Commit transacts all the segments.
-	Commit(*Transaction) error
+	Commit(*Query) error
 
 	// Failed terminates all the segments.
-	Failed(*Transaction) error
+	Failed(*Query) error
 
 	// Len returns all the length of what's to be read
 	Len() int
@@ -38,24 +38,24 @@ type Stream interface {
 }
 
 // All returns a transaction that states everything should be commited
-func All() *Transaction {
-	return &Transaction{
+func All() *Query {
+	return &Query{
 		wildcard: true,
 		segments: make(map[uuid.UUID][]uuid.UUID),
 	}
 }
 
-// Transaction holds a list of segment ids and associated record ids, useful
+// Query holds a list of segment ids and associated record ids, useful
 // when commiting or failling a series of records.
-type Transaction struct {
+type Query struct {
 	wildcard bool
 	segments map[uuid.UUID][]uuid.UUID
 	size     int
 }
 
-// NewTransaction creates a new transaction
-func NewTransaction() *Transaction {
-	return &Transaction{
+// NewQuery creates a new Query
+func NewQuery() *Query {
+	return &Query{
 		wildcard: false,
 		segments: make(map[uuid.UUID][]uuid.UUID),
 		size:     0,
@@ -63,24 +63,24 @@ func NewTransaction() *Transaction {
 }
 
 // Set adds a segment id and associated records ids
-func (t *Transaction) Set(id uuid.UUID, ids []uuid.UUID) {
+func (t *Query) Set(id uuid.UUID, ids []uuid.UUID) {
 	t.segments[id] = ids
 	t.size += len(ids)
 }
 
 // Get selects a segment id to retirevie the associated records ids
-func (t *Transaction) Get(id uuid.UUID) ([]uuid.UUID, bool) {
+func (t *Query) Get(id uuid.UUID) ([]uuid.UUID, bool) {
 	ids, ok := t.segments[id]
 	return ids, ok
 }
 
-// Len returns the transaction size
-func (t *Transaction) Len() int {
+// Len returns the Query size
+func (t *Query) Len() int {
 	return t.size
 }
 
 // All returns if everything should be used
-func (t *Transaction) All() bool {
+func (t *Query) All() bool {
 	return t.wildcard
 }
 

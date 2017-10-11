@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/trussle/courier/pkg/queue"
-	"github.com/trussle/courier/pkg/uuid"
 )
 
 // Stream represents a series of active records
@@ -66,17 +65,17 @@ func (l *virtualStream) Walk(fn func(queue.Segment) error) error {
 }
 
 // Commit commits all the segments so that we can delete messages from the queue
-func (l *virtualStream) Commit(input *Transaction) error {
+func (l *virtualStream) Commit(input *Query) error {
 	return l.resetVia(input, Flushed)
 }
 
 // Failed fails all the segments to make sure that we no longer work on those
 // messages
-func (l *virtualStream) Failed(input *Transaction) error {
+func (l *virtualStream) Failed(input *Query) error {
 	return l.resetVia(input, Failed)
 }
 
-func (l *virtualStream) resetVia(input *Transaction, reason Extension) error {
+func (l *virtualStream) resetVia(input *Query, reason Extension) error {
 	union, difference := intersection(l.active, input)
 
 	for segment, ids := range union {
@@ -94,56 +93,14 @@ func (l *virtualStream) resetVia(input *Transaction, reason Extension) error {
 
 	var segments []queue.Segment
 	for segment := range difference {
-		segments = append(segments, segment)
+		// Prevent empty segments from being reattached.
+		if segment.Size() > 0 {
+			segments = append(segments, segment)
+		}
 	}
 
 	l.active = segments
 	l.activeSince = time.Time{}
 
 	return nil
-}
-
-func intersection(segments []queue.Segment, input *Transaction) (map[queue.Segment][]uuid.UUID, map[queue.Segment][]uuid.UUID) {
-	var (
-		union      = make(map[queue.Segment][]uuid.UUID)
-		difference = make(map[queue.Segment][]uuid.UUID)
-	)
-
-	for _, segment := range segments {
-
-		// Everything is a union, there are no differences
-		if input.All() {
-			if err := segment.Walk(func(record queue.Record) error {
-				union[segment] = append(union[segment], record.ID)
-				return nil
-			}); err != nil {
-				continue
-			}
-
-			// We're done here, move on!
-			continue
-		}
-
-		// Find union and differences from the input
-		potential, ok := input.Get(segment.ID())
-		if err := segment.Walk(func(record queue.Record) error {
-			// Nothing found at all, so push everything to difference
-			if !ok {
-				difference[segment] = append(difference[segment], record.ID)
-				return nil
-			}
-
-			// If something found and is found in potential haystack add it to the
-			// union.
-			if contains(potential, record.ID) {
-				union[segment] = append(union[segment], record.ID)
-			} else {
-				difference[segment] = append(union[segment], record.ID)
-			}
-			return nil
-		}); err != nil {
-			continue
-		}
-	}
-	return
 }

@@ -137,17 +137,17 @@ func (s *localStream) Walk(fn func(queue.Segment) error) (err error) {
 
 // Commit commits all read segments that have been worked on via Walk, so that
 // we can delete messages from the queue
-func (s *localStream) Commit(input *Transaction) error {
+func (s *localStream) Commit(input *Query) error {
 	return s.resetVia(input, Flushed)
 }
 
 // Failed fails all segments that have been worked on via Walk. To make sure
 // that we no longer work on those messages
-func (s *localStream) Failed(input *Transaction) error {
+func (s *localStream) Failed(input *Query) error {
 	return s.resetVia(input, Failed)
 }
 
-func (s *localStream) resetVia(input *Transaction, reason Extension) error {
+func (s *localStream) resetVia(input *Query, reason Extension) error {
 	lock := filepath.Join(s.root, lockFile)
 	r, _, err := s.fsys.Lock(lock)
 	if err != nil {
@@ -155,38 +155,8 @@ func (s *localStream) resetVia(input *Transaction, reason Extension) error {
 	}
 	defer r.Release()
 
-	var segments []queue.Segment
-	err = s.Walk(func(segment queue.Segment) error {
-		var ids []uuid.UUID
-		if input.All() {
-			if err := segment.Walk(func(record queue.Record) error {
-				ids = append(ids, record.ID)
-				return nil
-			}); err != nil {
-				return nil
-			}
-		} else {
-			var ok bool
-			if ids, ok = input.Get(segment.ID()); !ok {
-				segments = append(segments, segment)
-				return nil
-			}
-		}
-
-		// Select records that we actual need
-		var records []queue.Record
-		if err := segment.Walk(func(record queue.Record) error {
-			if contains(ids, record.ID) {
-				records = append(records, record)
-			}
-			return nil
-		}); err != nil {
-			return err
-		}
-
-		if len(records) == 0 {
-			return nil
-		}
+	union, difference := intersection(s.active, input)
+	for segment, ids := range union {
 
 		fileName := filepath.Join(s.root, segment.ID().String())
 
@@ -195,7 +165,23 @@ func (s *localStream) resetVia(input *Transaction, reason Extension) error {
 			if _, err := segment.Failed(ids); err != nil {
 				return err
 			}
+
 		case Flushed:
+			// Select records that we actual need
+			var records []queue.Record
+			if err := segment.Walk(func(record queue.Record) error {
+				if contains(ids, record.ID) {
+					records = append(records, record)
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+
+			if len(records) == 0 {
+				return nil
+			}
+
 			if _, err := segment.Commit(ids); err != nil {
 				return err
 			}
@@ -218,8 +204,18 @@ func (s *localStream) resetVia(input *Transaction, reason Extension) error {
 			}
 		}
 
-		return s.fsys.Remove(fmt.Sprintf("%s%s", fileName, Active.Ext()))
-	})
+		if err := s.fsys.Remove(fmt.Sprintf("%s%s", fileName, Active.Ext())); err != nil {
+			return err
+		}
+	}
+
+	var segments []queue.Segment
+	for segment := range difference {
+		// Prevent empty segments from being reattached.
+		if segment.Size() > 0 {
+			segments = append(segments, segment)
+		}
+	}
 
 	s.active = segments
 	s.activeSince = time.Time{}

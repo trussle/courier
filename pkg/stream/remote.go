@@ -109,17 +109,17 @@ func (l *remoteStream) Walk(fn func(queue.Segment) error) error {
 }
 
 // Commit commits all the segments so that we can delete messages from the queue
-func (l *remoteStream) Commit(input *Transaction) error {
+func (l *remoteStream) Commit(input *Query) error {
 	return l.resetVia(input, Flushed)
 }
 
 // Failed fails all the segments to make sure that we no longer work on those
 // messages
-func (l *remoteStream) Failed(input *Transaction) error {
+func (l *remoteStream) Failed(input *Query) error {
 	return l.resetVia(input, Failed)
 }
 
-func (l *remoteStream) resetVia(input *Transaction, reason Extension) error {
+func (l *remoteStream) resetVia(input *Query, reason Extension) error {
 	union, difference := intersection(l.active, input)
 
 	for segment, ids := range union {
@@ -166,7 +166,10 @@ func (l *remoteStream) resetVia(input *Transaction, reason Extension) error {
 
 	var segments []queue.Segment
 	for segment := range difference {
-		segments = append(segments, segment)
+		// Prevent empty segments from being reattached.
+		if segment.Size() > 0 {
+			segments = append(segments, segment)
+		}
 	}
 
 	l.active = segments
