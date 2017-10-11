@@ -78,12 +78,12 @@ func TestRemoteStream_Integration(t *testing.T) {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
 
-		transaction := NewTransaction()
-		transaction.Set(sid, []uuid.UUID{
+		query := NewQuery()
+		query.Set(sid, []uuid.UUID{
 			rid,
 		})
 
-		err = stream.Commit(transaction)
+		err = stream.Commit(query)
 		if expected, actual := true, err == nil; expected != actual {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
@@ -149,12 +149,12 @@ func TestRemoteStream_Integration(t *testing.T) {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
 
-		transaction := NewTransaction()
-		transaction.Set(sid, []uuid.UUID{
+		query := NewQuery()
+		query.Set(sid, []uuid.UUID{
 			rid,
 		})
 
-		err = stream.Failed(transaction)
+		err = stream.Failed(query)
 		if expected, actual := true, err == nil; expected != actual {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
