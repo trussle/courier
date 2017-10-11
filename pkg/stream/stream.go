@@ -13,7 +13,7 @@ import (
 // Stream defines a queue of segments that are to be replayed on.
 type Stream interface {
 
-	// Append a Segment to the log, if it fails then it will return an error
+	// Append a Segment to the stream, if it fails then it will return an error
 	Append(queue.Segment) error
 
 	// Walk over each record in every segment sequentially.
@@ -28,12 +28,12 @@ type Stream interface {
 	// Len returns all the length of what's to be read
 	Len() int
 
-	// Capacity returns if the log is at capacity
+	// Capacity returns if the stream is at capacity
 	// More items can be filled in, nothing will be rejected, it's just an
-	// indicator that the log is full.
+	// indicator that the stream is full.
 	Capacity() bool
 
-	// Reset completely resets the log back to a fresh state.
+	// Reset completely resets the stream back to a fresh state.
 	Reset() error
 }
 
