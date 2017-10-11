@@ -78,12 +78,12 @@ func TestRemoteStream_Integration(t *testing.T) {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
 
-		transaction := NewTransaction()
-		transaction.Set(sid, []uuid.UUID{
+		query := NewQuery()
+		query.Set(sid, []uuid.UUID{
 			rid,
 		})
 
-		err = stream.Commit(transaction)
+		err = stream.Commit(query)
 		if expected, actual := true, err == nil; expected != actual {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
@@ -149,12 +149,12 @@ func TestRemoteStream_Integration(t *testing.T) {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
 
-		transaction := NewTransaction()
-		transaction.Set(sid, []uuid.UUID{
+		query := NewQuery()
+		query.Set(sid, []uuid.UUID{
 			rid,
 		})
 
-		err = stream.Failed(transaction)
+		err = stream.Failed(query)
 		if expected, actual := true, err == nil; expected != actual {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
@@ -200,71 +200,4 @@ func GetEnv(key string, defaultValue string) (value string) {
 		return
 	}
 	return defaultValue
-}
-
-type testSegment struct {
-	id      uuid.UUID
-	records []queue.Record
-}
-
-func newVirtualSegment(id uuid.UUID, records []queue.Record) *testSegment {
-	return &testSegment{
-		id:      id,
-		records: records,
-	}
-}
-
-func (v *testSegment) ID() uuid.UUID {
-	return v.id
-}
-
-func (v *testSegment) Walk(fn func(queue.Record) error) (err error) {
-	for _, rec := range v.records {
-		if err = fn(rec); err != nil {
-			break
-		}
-	}
-	return
-}
-
-func (v *testSegment) Commit(ids []uuid.UUID) (queue.Result, error) {
-	if len(v.records) == 0 {
-		return queue.Result{0, 0}, nil
-	}
-
-	result, _ := transactIDs(v.records, ids)
-	v.records = v.records[:0]
-	return result, nil
-}
-
-func (v *testSegment) Failed(ids []uuid.UUID) (queue.Result, error) {
-	if len(v.records) == 0 {
-		return queue.Result{0, 0}, nil
-	}
-
-	result, _ := transactIDs(v.records, ids)
-	v.records = v.records[:0]
-	return result, nil
-}
-
-func (v *testSegment) Size() int {
-	return len(v.records)
-}
-
-func transactIDs(records []queue.Record, ids []uuid.UUID) (queue.Result, []queue.Record) {
-	// Fast exit
-	if len(ids) == 0 {
-		return queue.Result{0, len(records)}, make([]queue.Record, 0)
-	}
-
-	// Match items that are not in the ids
-	var replicate []queue.Record
-	for _, v := range records {
-		if contains(ids, v.ID) {
-			replicate = append(replicate, v)
-		}
-	}
-
-	replicated := len(replicate)
-	return queue.Result{replicated, len(records) - replicated}, replicate
 }

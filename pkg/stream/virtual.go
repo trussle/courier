@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/trussle/courier/pkg/queue"
-	"github.com/trussle/courier/pkg/uuid"
 )
 
 // Stream represents a series of active records
@@ -66,35 +65,20 @@ func (l *virtualStream) Walk(fn func(queue.Segment) error) error {
 }
 
 // Commit commits all the segments so that we can delete messages from the queue
-func (l *virtualStream) Commit(input *Transaction) error {
+func (l *virtualStream) Commit(input *Query) error {
 	return l.resetVia(input, Flushed)
 }
 
 // Failed fails all the segments to make sure that we no longer work on those
 // messages
-func (l *virtualStream) Failed(input *Transaction) error {
+func (l *virtualStream) Failed(input *Query) error {
 	return l.resetVia(input, Failed)
 }
 
-func (l *virtualStream) resetVia(input *Transaction, reason Extension) error {
-	var segments []queue.Segment
-	for _, segment := range l.active {
-		var ids []uuid.UUID
-		if input.All() {
-			if err := segment.Walk(func(record queue.Record) error {
-				ids = append(ids, record.ID)
-				return nil
-			}); err != nil {
-				continue
-			}
-		} else {
-			var ok bool
-			if ids, ok = input.Get(segment.ID()); !ok {
-				segments = append(segments, segment)
-				continue
-			}
-		}
+func (l *virtualStream) resetVia(input *Query, reason Extension) error {
+	union, difference := intersection(l.active, input)
 
+	for segment, ids := range union {
 		switch reason {
 		case Failed:
 			if _, err := segment.Failed(ids); err != nil {
@@ -104,6 +88,14 @@ func (l *virtualStream) resetVia(input *Transaction, reason Extension) error {
 			if _, err := segment.Commit(ids); err != nil {
 				return err
 			}
+		}
+	}
+
+	var segments []queue.Segment
+	for segment := range difference {
+		// Prevent empty segments from being reattached.
+		if segment.Size() > 0 {
+			segments = append(segments, segment)
 		}
 	}
 

@@ -4,13 +4,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	"github.com/trussle/courier/pkg/http"
 	"github.com/trussle/courier/pkg/metrics"
 	"github.com/trussle/courier/pkg/queue"
 	"github.com/trussle/courier/pkg/stream"
 	"github.com/trussle/courier/pkg/uuid"
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
 )
 
 const (
@@ -147,7 +147,7 @@ func (c *Consumer) replicate() stateFn {
 		warn = level.Warn(base)
 	)
 
-	replicated := stream.NewTransaction()
+	replicated := stream.NewQuery()
 
 	// Replicate the records to the endpoint
 	if err := c.stream.Walk(func(segment queue.Segment) error {

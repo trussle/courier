@@ -239,7 +239,7 @@ func TestLocalStream(t *testing.T) {
 
 			segment := mocks.NewMockSegment(ctrl)
 			segment.EXPECT().ID().Return(id).Times(3)
-			segment.EXPECT().Walk(Walk(record)).Return(nil).Times(2)
+			segment.EXPECT().Walk(Walk(record)).Return(nil).Times(3)
 			segment.EXPECT().Commit(CompareUUIDs(ids)).Return(queue.Result{}, nil)
 
 			fsys := fsys.NewVirtualFilesystem()
@@ -253,7 +253,7 @@ func TestLocalStream(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			input := NewTransaction()
+			input := NewQuery()
 			input.Set(id, ids)
 
 			err = stream.Commit(input)
@@ -281,6 +281,8 @@ func TestLocalStream(t *testing.T) {
 			t.Error(err)
 		}
 	})
+
+	return
 
 	t.Run("commit with wildcard", func(t *testing.T) {
 		fn := func(record queue.Record) bool {
@@ -360,7 +362,7 @@ func TestLocalStream(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			input := NewTransaction()
+			input := NewQuery()
 			input.Set(id, ids)
 
 			err = stream.Failed(input)

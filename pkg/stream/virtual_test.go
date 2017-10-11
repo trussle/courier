@@ -7,14 +7,14 @@ import (
 	"testing/quick"
 	"time"
 
+	"github.com/go-kit/kit/log"
+	"github.com/golang/mock/gomock"
 	"github.com/trussle/courier/pkg/queue"
 	"github.com/trussle/courier/pkg/queue/mocks"
 	"github.com/trussle/courier/pkg/uuid"
-	"github.com/go-kit/kit/log"
-	"github.com/golang/mock/gomock"
 )
 
-func TestStream(t *testing.T) {
+func TestVirtualStream(t *testing.T) {
 	t.Parallel()
 
 	config, err := Build(
@@ -172,12 +172,12 @@ func TestStream(t *testing.T) {
 				record.ID,
 			}
 
-			transaction := NewTransaction()
-			transaction.Set(id, ids)
+			query := NewQuery()
+			query.Set(id, ids)
 
 			segment := mocks.NewMockSegment(ctrl)
 			segment.EXPECT().ID().Return(id)
-			segment.EXPECT().Walk(Walk(record)).Return(nil)
+			segment.EXPECT().Walk(Walk(record)).Return(nil).Times(2)
 			segment.EXPECT().Commit(CompareUUIDs(ids)).Return(queue.Result{}, nil)
 
 			stream := newVirtualStream(1, time.Second)
@@ -198,7 +198,7 @@ func TestStream(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = stream.Commit(transaction)
+			err = stream.Commit(query)
 			if expected, actual := true, err == nil; expected != actual {
 				t.Errorf("expected: %t, actual: %t", expected, actual)
 			}
@@ -221,12 +221,13 @@ func TestStream(t *testing.T) {
 				record.ID,
 			}
 
-			transaction := NewTransaction()
-			transaction.Set(id1, ids)
+			query := NewQuery()
+			query.Set(id1, ids)
 
 			segment := mocks.NewMockSegment(ctrl)
 			segment.EXPECT().ID().Return(id0)
-			segment.EXPECT().Walk(Walk(record)).Return(nil)
+			segment.EXPECT().Walk(Walk(record)).Return(nil).Times(2)
+			segment.EXPECT().Size().Return(1)
 
 			stream := newVirtualStream(1, time.Second)
 			if err := stream.Append(segment); err != nil {
@@ -246,7 +247,7 @@ func TestStream(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = stream.Commit(transaction)
+			err = stream.Commit(query)
 			if expected, actual := true, err == nil; expected != actual {
 				t.Errorf("expected: %t, actual: %t", expected, actual)
 			}
@@ -260,7 +261,7 @@ func TestStream(t *testing.T) {
 		}
 	})
 
-	t.Run("walk on stream then commit with transaction all", func(t *testing.T) {
+	t.Run("walk on stream then commit with query all", func(t *testing.T) {
 		fn := func(id0, id1 uuid.UUID, record queue.Record) bool {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
@@ -269,9 +270,9 @@ func TestStream(t *testing.T) {
 				record.ID,
 			}
 
-			transaction := NewTransaction()
-			transaction.Set(id0, ids)
-			transaction.Set(id1, ids)
+			query := NewQuery()
+			query.Set(id0, ids)
+			query.Set(id1, ids)
 
 			segment := mocks.NewMockSegment(ctrl)
 			segment.EXPECT().Walk(Walk(record)).Return(nil).Times(2)
@@ -318,12 +319,12 @@ func TestStream(t *testing.T) {
 				record.ID,
 			}
 
-			transaction := NewTransaction()
-			transaction.Set(id, ids)
+			query := NewQuery()
+			query.Set(id, ids)
 
 			segment := mocks.NewMockSegment(ctrl)
 			segment.EXPECT().ID().Return(id)
-			segment.EXPECT().Walk(Walk(record)).Return(nil)
+			segment.EXPECT().Walk(Walk(record)).Return(nil).Times(2)
 			segment.EXPECT().Failed(CompareUUIDs(ids)).Return(queue.Result{}, nil)
 
 			stream := newVirtualStream(1, time.Second)
@@ -344,7 +345,7 @@ func TestStream(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = stream.Failed(transaction)
+			err = stream.Failed(query)
 			if expected, actual := true, err == nil; expected != actual {
 				t.Errorf("expected: %t, actual: %t", expected, actual)
 			}
@@ -367,12 +368,13 @@ func TestStream(t *testing.T) {
 				record.ID,
 			}
 
-			transaction := NewTransaction()
-			transaction.Set(id1, ids)
+			query := NewQuery()
+			query.Set(id1, ids)
 
 			segment := mocks.NewMockSegment(ctrl)
 			segment.EXPECT().ID().Return(id0)
-			segment.EXPECT().Walk(Walk(record)).Return(nil)
+			segment.EXPECT().Walk(Walk(record)).Return(nil).Times(2)
+			segment.EXPECT().Size().Return(1)
 
 			stream := newVirtualStream(1, time.Second)
 			if err := stream.Append(segment); err != nil {
@@ -392,7 +394,7 @@ func TestStream(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = stream.Failed(transaction)
+			err = stream.Failed(query)
 			if expected, actual := true, err == nil; expected != actual {
 				t.Errorf("expected: %t, actual: %t", expected, actual)
 			}
@@ -406,7 +408,7 @@ func TestStream(t *testing.T) {
 		}
 	})
 
-	t.Run("walk on stream then failed with transaction all", func(t *testing.T) {
+	t.Run("walk on stream then failed with query all", func(t *testing.T) {
 		fn := func(id0, id1 uuid.UUID, record queue.Record) bool {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
@@ -415,9 +417,9 @@ func TestStream(t *testing.T) {
 				record.ID,
 			}
 
-			transaction := NewTransaction()
-			transaction.Set(id0, ids)
-			transaction.Set(id1, ids)
+			query := NewQuery()
+			query.Set(id0, ids)
+			query.Set(id1, ids)
 
 			segment := mocks.NewMockSegment(ctrl)
 			segment.EXPECT().Walk(Walk(record)).Return(nil).Times(2)
@@ -507,19 +509,19 @@ func (uuidsMatcher) String() string {
 
 func CompareUUIDs(ids []uuid.UUID) gomock.Matcher { return uuidsMatcher{ids} }
 
-type transactionMatcher struct {
-	transaction *Transaction
+type queryMatcher struct {
+	query *Query
 }
 
-func (m transactionMatcher) Matches(x interface{}) bool {
-	if t, ok := x.(*Transaction); ok {
-		return reflect.DeepEqual(t.segments, m.transaction.segments)
+func (m queryMatcher) Matches(x interface{}) bool {
+	if t, ok := x.(*Query); ok {
+		return reflect.DeepEqual(t.segments, m.query.segments)
 	}
 	return false
 }
 
-func (transactionMatcher) String() string {
-	return "is transaction"
+func (queryMatcher) String() string {
+	return "is query"
 }
 
-func CompareTransaction(t *Transaction) gomock.Matcher { return transactionMatcher{t} }
+func CompareQuery(t *Query) gomock.Matcher { return queryMatcher{t} }
