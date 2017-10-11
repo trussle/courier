@@ -116,33 +116,33 @@ func runIngest(args []string) error {
 
 	// Instrumentation
 	connectedClients := prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "trussle_transformer_store",
+		Namespace: "courier_transformer_store",
 		Name:      "connected_clients",
 		Help:      "Number of currently connected clients by modality.",
 	}, []string{"modality"})
 	apiDuration := prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "trussle_transformer_store",
+		Namespace: "courier_transformer_store",
 		Name:      "api_request_duration_seconds",
 		Help:      "API request duration in seconds.",
 		Buckets:   prometheus.DefBuckets,
 	}, []string{"method", "path", "status_code"})
 	consumedSegments := prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: "trussle_transformer_store",
+		Namespace: "courier_transformer_store",
 		Name:      "store_consumed_segments",
 		Help:      "Segments consumed from ingest.",
 	})
 	consumedRecords := prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: "trussle_transformer_store",
+		Namespace: "courier_transformer_store",
 		Name:      "store_consumed_records",
 		Help:      "Records consumed from ingest.",
 	})
 	replicatedSegments := prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: "trussle_transformer_store",
+		Namespace: "courier_transformer_store",
 		Name:      "store_replicated_segments",
 		Help:      "Segments replicated from ingest.",
 	})
 	replicatedRecords := prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: "trussle_transformer_store",
+		Namespace: "courier_transformer_store",
 		Name:      "store_replicated_records",
 		Help:      "Records replicated from ingest.",
 	})
