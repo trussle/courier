@@ -4,7 +4,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/trussle/courier/pkg/uuid"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -12,6 +11,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
+	"github.com/trussle/courier/pkg/uuid"
 )
 
 // RemoteConfig creates a configuration to create a RemoteQueue.
@@ -38,10 +38,17 @@ func NewRemoteQueue(config *RemoteConfig, logger log.Logger) (Queue, error) {
 }
 
 func newRemoteQueue(config *RemoteConfig, logger log.Logger) (*remoteQueue, error) {
-	creds := credentials.NewStaticCredentials(
-		config.ID,
-		config.Secret,
-		config.Token,
+	creds := credentials.NewChainCredentials(
+		[]credentials.Provider{
+			&credentials.EnvProvider{},
+			&credentials.StaticProvider{
+				Value: credentials.Value{
+					AccessKeyID:     config.ID,
+					SecretAccessKey: config.Secret,
+					SessionToken:    config.Token,
+				},
+			},
+		},
 	)
 	if _, err := creds.Get(); err != nil {
 		return nil, errors.Wrap(err, "invalid credentials")

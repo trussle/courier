@@ -41,10 +41,17 @@ func NewRemoteStream(config *RemoteConfig, logger log.Logger) (Stream, error) {
 // NewRemoteStream creates a new Stream with a size and age to know when a
 // Stream is at a certain capacity
 func newRemoteStream(config *RemoteConfig, logger log.Logger) (*remoteStream, error) {
-	creds := credentials.NewStaticCredentials(
-		config.ID,
-		config.Secret,
-		config.Token,
+	creds := credentials.NewChainCredentials(
+		[]credentials.Provider{
+			&credentials.EnvProvider{},
+			&credentials.StaticProvider{
+				Value: credentials.Value{
+					AccessKeyID:     config.ID,
+					SecretAccessKey: config.Secret,
+					SessionToken:    config.Token,
+				},
+			},
+		},
 	)
 	if _, err := creds.Get(); err != nil {
 		return nil, errors.Wrap(err, "invalid credentials")
