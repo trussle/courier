@@ -28,10 +28,11 @@ func TestRemoteStream_Integration(t *testing.T) {
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	config, err := BuildConfig(
-		WithRegion(GetEnv("AWS_FIREHOSE_REGION", defaultAWSRegion)),
-		WithID(GetEnv("AWS_FIREHOSE_ID", defaultAWSID)),
-		WithSecret(GetEnv("AWS_FIREHOSE_SECRET", defaultAWSSecret)),
-		WithToken(GetEnv("AWS_FIREHOSE_TOKEN", defaultAWSToken)),
+		WithEC2Role(false),
+		WithRegion(GetEnv("AWS_REGION", defaultAWSRegion)),
+		WithID(GetEnv("AWS_ID", defaultAWSID)),
+		WithSecret(GetEnv("AWS_SECRET", defaultAWSSecret)),
+		WithToken(GetEnv("AWS_TOKEN", defaultAWSToken)),
 		WithStream(GetEnv("AWS_FIREHOSE_STREAM", defaultAWSStream)),
 		WithMaxNumberOfMessages(10),
 		WithVisibilityTimeout(time.Second*100),

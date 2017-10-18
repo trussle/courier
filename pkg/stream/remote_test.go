@@ -14,6 +14,7 @@ func TestConfigBuild(t *testing.T) {
 	t.Run("build", func(t *testing.T) {
 		fn := func(id, secret, token, region, stream string, numOfMessages int, timeout int64) bool {
 			config, err := BuildConfig(
+				WithEC2Role(false),
 				WithID(id),
 				WithSecret(secret),
 				WithToken(token),

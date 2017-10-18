@@ -6,8 +6,8 @@ import (
 	"testing/quick"
 	"time"
 
-	"github.com/trussle/courier/pkg/uuid"
 	"github.com/pkg/errors"
+	"github.com/trussle/courier/pkg/uuid"
 )
 
 func TestConfigBuild(t *testing.T) {
@@ -16,6 +16,7 @@ func TestConfigBuild(t *testing.T) {
 	t.Run("build", func(t *testing.T) {
 		fn := func(id, secret, token, region, queue string, numOfMessages, timeout int64) bool {
 			config, err := BuildConfig(
+				WithEC2Role(false),
 				WithID(id),
 				WithSecret(secret),
 				WithToken(token),

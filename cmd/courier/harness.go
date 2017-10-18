@@ -28,11 +28,11 @@ func runHarness(args []string) error {
 		debug   = flagset.Bool("debug", false, "debug logging")
 		apiAddr = flagset.String("api", defaultAPIAddr, "listen address for harness API")
 
-		awsSQSID     = flagset.String("aws.sqs.id", defaultAWSSQSID, "AWS configuration id")
-		awsSQSSecret = flagset.String("aws.sqs.secret", defaultAWSSQSSecret, "AWS configuration secret")
-		awsSQSToken  = flagset.String("aws.sqs.token", defaultAWSSQSToken, "AWS configuration token")
-		awsSQSRegion = flagset.String("aws.sqs.region", defaultAWSSQSRegion, "AWS configuration region")
-		awsSQSQueue  = flagset.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
+		awsID       = flagset.String("aws.id", defaultAWSID, "AWS configuration id")
+		awsSecret   = flagset.String("aws.secret", defaultAWSSecret, "AWS configuration secret")
+		awsToken    = flagset.String("aws.token", defaultAWSToken, "AWS configuration token")
+		awsRegion   = flagset.String("aws.region", defaultAWSRegion, "AWS configuration region")
+		awsSQSQueue = flagset.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
 	)
 
 	var envArgs []string
@@ -73,10 +73,10 @@ func runHarness(args []string) error {
 
 	// Configuration for the queue
 	remoteConfig, err := queue.BuildConfig(
-		queue.WithID(*awsSQSID),
-		queue.WithSecret(*awsSQSSecret),
-		queue.WithToken(*awsSQSToken),
-		queue.WithRegion(*awsSQSRegion),
+		queue.WithID(*awsID),
+		queue.WithSecret(*awsSecret),
+		queue.WithToken(*awsToken),
+		queue.WithRegion(*awsRegion),
 		queue.WithQueue(*awsSQSQueue),
 	)
 	if err != nil {

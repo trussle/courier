@@ -30,16 +30,13 @@ const (
 
 	defaultRootDir = "bin"
 
-	defaultAWSSQSID     = ""
-	defaultAWSSQSSecret = ""
-	defaultAWSSQSToken  = ""
-	defaultAWSSQSRegion = "eu-west-1"
-	defaultAWSSQSQueue  = ""
+	defaultEC2Role   = true
+	defaultAWSID     = ""
+	defaultAWSSecret = ""
+	defaultAWSToken  = ""
+	defaultAWSRegion = "eu-west-1"
 
-	defaultAWSFirehoseID     = ""
-	defaultAWSFirehoseSecret = ""
-	defaultAWSFirehoseToken  = ""
-	defaultAWSFirehoseRegion = "eu-west-1"
+	defaultAWSSQSQueue       = ""
 	defaultAWSFirehoseStream = ""
 
 	defaultRecipientURL        = ""
@@ -59,16 +56,13 @@ func runIngest(args []string) error {
 		debug   = flagset.Bool("debug", false, "debug logging")
 		apiAddr = flagset.String("api", defaultAPIAddr, "listen address for ingest API")
 
-		awsSQSID     = flagset.String("aws.sqs.id", defaultAWSSQSID, "AWS configuration id")
-		awsSQSSecret = flagset.String("aws.sqs.secret", defaultAWSSQSSecret, "AWS configuration secret")
-		awsSQSToken  = flagset.String("aws.sqs.token", defaultAWSSQSToken, "AWS configuration token")
-		awsSQSRegion = flagset.String("aws.sqs.region", defaultAWSSQSRegion, "AWS configuration region")
-		awsSQSQueue  = flagset.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
+		awsEC2Role = flagset.Bool("aws.ec2.role", defaultEC2Role, "AWS configuration to use EC2 roles")
+		awsID      = flagset.String("aws.id", defaultAWSID, "AWS configuration id")
+		awsSecret  = flagset.String("aws.secret", defaultAWSSecret, "AWS configuration secret")
+		awsToken   = flagset.String("aws.token", defaultAWSToken, "AWS configuration token")
+		awsRegion  = flagset.String("aws.region", defaultAWSRegion, "AWS configuration region")
 
-		awsFirehoseID     = flagset.String("aws.firehose.id", defaultAWSFirehoseID, "AWS configuration id")
-		awsFirehoseSecret = flagset.String("aws.firehose.secret", defaultAWSFirehoseSecret, "AWS configuration secret")
-		awsFirehoseToken  = flagset.String("aws.firehose.token", defaultAWSFirehoseToken, "AWS configuration token")
-		awsFirehoseRegion = flagset.String("aws.firehose.region", defaultAWSFirehoseRegion, "AWS configuration region")
+		awsSQSQueue       = flagset.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
 		awsFirehoseStream = flagset.String("aws.firehose.queue", defaultAWSFirehoseStream, "AWS configuration stream")
 
 		queueType      = flagset.String("queue", defaultQueue, "type of queue to use (remote, virtual, nop)")
@@ -189,10 +183,11 @@ func runIngest(args []string) error {
 
 	// Firehose setup.
 	streamRemoteConfig, err := stream.BuildConfig(
-		stream.WithID(*awsFirehoseID),
-		stream.WithSecret(*awsFirehoseSecret),
-		stream.WithToken(*awsFirehoseToken),
-		stream.WithRegion(*awsFirehoseRegion),
+		stream.WithEC2Role(*awsEC2Role),
+		stream.WithID(*awsID),
+		stream.WithSecret(*awsSecret),
+		stream.WithToken(*awsToken),
+		stream.WithRegion(*awsRegion),
 		stream.WithStream(*awsFirehoseStream),
 		stream.WithMaxNumberOfMessages(int(*maxNumberOfMessages)),
 		stream.WithVisibilityTimeout(visibilityTimeoutDuration),
@@ -218,10 +213,11 @@ func runIngest(args []string) error {
 
 	// Configuration for the queue
 	queueRemoteConfig, err := queue.BuildConfig(
-		queue.WithID(*awsSQSID),
-		queue.WithSecret(*awsSQSSecret),
-		queue.WithToken(*awsSQSToken),
-		queue.WithRegion(*awsSQSRegion),
+		queue.WithEC2Role(*awsEC2Role),
+		queue.WithID(*awsID),
+		queue.WithSecret(*awsSecret),
+		queue.WithToken(*awsToken),
+		queue.WithRegion(*awsRegion),
 		queue.WithQueue(*awsSQSQueue),
 		queue.WithMaxNumberOfMessages(int64(*maxNumberOfMessages)),
 		queue.WithVisibilityTimeout(visibilityTimeoutDuration),

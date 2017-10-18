@@ -7,13 +7,9 @@ services:
       - ./:/go/src/github.com/trussle/courier
     working_dir: /go/src/github.com/trussle/courier
     environment:
-      AWS_SQS_ID: "${AWS_SQS_ID}"
-      AWS_SQS_SECRET: "${AWS_SQS_SECRET}"
-      AWS_SQS_REGION: "${AWS_SQS_REGION}"
-      AWS_SQS_TOKEN: "${AWS_SQS_TOKEN}"
+      AWS_ID: "${AWS_ID}"
+      AWS_SECRET: "${AWS_SECRET}"
+      AWS_REGION: "${AWS_REGION}"
+      AWS_TOKEN: "${AWS_TOKEN}"
       AWS_SQS_QUEUE: "${AWS_SQS_QUEUE}"
-      AWS_FIREHOSE_ID: "${AWS_FIREHOSE_ID}"
-      AWS_FIREHOSE_SECRET: "${AWS_FIREHOSE_SECRET}"
-      AWS_FIREHOSE_REGION: "${AWS_FIREHOSE_REGION}"
-      AWS_FIREHOSE_TOKEN: "${AWS_FIREHOSE_TOKEN}"
       AWS_FIREHOSE_STREAM: "${AWS_FIREHOSE_STREAM}"

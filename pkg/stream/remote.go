@@ -6,6 +6,8 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
+	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/firehose"
 	"github.com/go-kit/kit/log"
@@ -16,6 +18,7 @@ import (
 
 // RemoteConfig creates a configuration to create a RemoteStream.
 type RemoteConfig struct {
+	EC2Role             bool
 	ID, Secret, Token   string
 	Region, Stream      string
 	MaxNumberOfMessages int
@@ -41,18 +44,23 @@ func NewRemoteStream(config *RemoteConfig, logger log.Logger) (Stream, error) {
 // NewRemoteStream creates a new Stream with a size and age to know when a
 // Stream is at a certain capacity
 func newRemoteStream(config *RemoteConfig, logger log.Logger) (*remoteStream, error) {
-	creds := credentials.NewChainCredentials(
-		[]credentials.Provider{
+	// If in EC2Role, attempt to get things from env or ec2role, else just use
+	// static credentials...
+	var creds *credentials.Credentials
+	if config.EC2Role {
+		creds = credentials.NewChainCredentials([]credentials.Provider{
 			&credentials.EnvProvider{},
-			&credentials.StaticProvider{
-				Value: credentials.Value{
-					AccessKeyID:     config.ID,
-					SecretAccessKey: config.Secret,
-					SessionToken:    config.Token,
-				},
+			&ec2rolecreds.EC2RoleProvider{
+				Client: ec2metadata.New(session.New()),
 			},
-		},
-	)
+		})
+	} else {
+		creds = credentials.NewStaticCredentials(
+			config.ID,
+			config.Secret,
+			config.Token,
+		)
+	}
 	if _, err := creds.Get(); err != nil {
 		return nil, errors.Wrap(err, "invalid credentials")
 	}
@@ -199,6 +207,14 @@ func BuildConfig(opts ...ConfigOption) (*RemoteConfig, error) {
 		}
 	}
 	return &config, nil
+}
+
+// WithEC2Role adds an EC2Role option to the configuration
+func WithEC2Role(ec2Role bool) ConfigOption {
+	return func(config *RemoteConfig) error {
+		config.EC2Role = ec2Role
+		return nil
+	}
 }
 
 // WithID adds an ID option to the configuration
