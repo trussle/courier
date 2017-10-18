@@ -1,16 +1,21 @@
 package generator
 
-import "github.com/trussle/courier/pkg/records"
-
 type nopGenerator struct{}
 
 func newNopGenerator() Generator {
 	return &nopGenerator{}
 }
 
-func (nopGenerator) Watch() <-chan records.Record {
-	return make(chan records.Record)
+func (nopGenerator) Watch() <-chan Record {
+	return make(chan Record)
 }
 
 func (nopGenerator) Run()  {}
 func (nopGenerator) Stop() {}
+
+func (nopGenerator) Commit(txn Transaction) (Result, error) {
+	return Result{txn.Len(), 0}, txn.Flush()
+}
+func (nopGenerator) Failed(txn Transaction) (Result, error) {
+	return Result{txn.Len(), 0}, txn.Flush()
+}

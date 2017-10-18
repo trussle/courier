@@ -1,23 +1,24 @@
 package generator
 
-import "github.com/trussle/courier/pkg/records"
 import "time"
 
 type virtualGenerator struct {
 	freq    time.Duration
 	stop    chan chan struct{}
-	records chan records.Record
+	records chan Record
+	fn      func() Record
 }
 
-func newVirtualGenerator(freq time.Duration) Generator {
+func newVirtualGenerator(freq time.Duration, fn func() Record) Generator {
 	return &virtualGenerator{
 		freq:    freq,
 		stop:    make(chan chan struct{}),
-		records: make(chan records.Record),
+		records: make(chan Record),
+		fn:      fn,
 	}
 }
 
-func (v *virtualGenerator) Watch() <-chan records.Record {
+func (v *virtualGenerator) Watch() <-chan Record {
 	return v.records
 }
 
@@ -28,8 +29,7 @@ func (v *virtualGenerator) Run() {
 	for {
 		select {
 		case <-step.C:
-			rec := records.Record{}
-			v.records <- rec
+			v.records <- v.fn()
 
 		case q := <-v.stop:
 			close(q)
@@ -42,4 +42,12 @@ func (v *virtualGenerator) Stop() {
 	q := make(chan struct{})
 	v.stop <- q
 	<-q
+}
+
+func (v *virtualGenerator) Commit(txn Transaction) (Result, error) {
+	return Result{txn.Len(), 0}, txn.Flush()
+}
+
+func (v *virtualGenerator) Failed(txn Transaction) (Result, error) {
+	return Result{txn.Len(), 0}, txn.Flush()
 }

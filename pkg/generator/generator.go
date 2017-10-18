@@ -1,11 +1,13 @@
 package generator
 
-import "github.com/trussle/courier/pkg/records"
-
 type Generator interface {
 	Run()
 
 	Stop()
 
-	Watch() <-chan records.Record
+	Watch() <-chan Record
+
+	Commit(Transaction) (Result, error)
+
+	Failed(Transaction) (Result, error)
 }
