@@ -4,18 +4,21 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/trussle/courier/pkg/uuid"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
+	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
+	"github.com/trussle/courier/pkg/uuid"
 )
 
 // RemoteConfig creates a configuration to create a RemoteQueue.
 type RemoteConfig struct {
+	EC2Role             bool
 	ID, Secret, Token   string
 	Region, Queue       string
 	MaxNumberOfMessages int64
@@ -38,11 +41,23 @@ func NewRemoteQueue(config *RemoteConfig, logger log.Logger) (Queue, error) {
 }
 
 func newRemoteQueue(config *RemoteConfig, logger log.Logger) (*remoteQueue, error) {
-	creds := credentials.NewStaticCredentials(
-		config.ID,
-		config.Secret,
-		config.Token,
-	)
+	// If in EC2Role, attempt to get things from env or ec2role, else just use
+	// static credentials...
+	var creds *credentials.Credentials
+	if config.EC2Role {
+		creds = credentials.NewChainCredentials([]credentials.Provider{
+			&credentials.EnvProvider{},
+			&ec2rolecreds.EC2RoleProvider{
+				Client: ec2metadata.New(session.New()),
+			},
+		})
+	} else {
+		creds = credentials.NewStaticCredentials(
+			config.ID,
+			config.Secret,
+			config.Token,
+		)
+	}
 	if _, err := creds.Get(); err != nil {
 		return nil, errors.Wrap(err, "invalid credentials")
 	}
@@ -277,6 +292,14 @@ func BuildConfig(opts ...ConfigOption) (*RemoteConfig, error) {
 		}
 	}
 	return &config, nil
+}
+
+// WithEC2Role adds an EC2Role option to the configuration
+func WithEC2Role(ec2Role bool) ConfigOption {
+	return func(config *RemoteConfig) error {
+		config.EC2Role = ec2Role
+		return nil
+	}
 }
 
 // WithID adds an ID option to the configuration
