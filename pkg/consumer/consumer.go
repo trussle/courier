@@ -6,11 +6,10 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/trussle/courier/pkg/generator"
 	"github.com/trussle/courier/pkg/http"
+	"github.com/trussle/courier/pkg/lru"
 	"github.com/trussle/courier/pkg/metrics"
-	"github.com/trussle/courier/pkg/queue"
-	"github.com/trussle/courier/pkg/stream"
-	"github.com/trussle/courier/pkg/uuid"
 )
 
 const (
@@ -24,14 +23,16 @@ const (
 type Consumer struct {
 	mutex              sync.Mutex
 	client             *http.Client
-	queue              queue.Queue
-	stream             stream.Stream
+	generator          generator.Generator
+	lru                *lru.LRU
 	gatherErrors       int
 	stop               chan chan struct{}
 	consumedSegments   metrics.Counter
 	consumedRecords    metrics.Counter
 	replicatedSegments metrics.Counter
 	replicatedRecords  metrics.Counter
+	failedSegments     metrics.Counter
+	failedRecords      metrics.Counter
 	gatherWaitTime     time.Duration
 	logger             log.Logger
 }
@@ -39,17 +40,15 @@ type Consumer struct {
 // New creates a consumer.
 func New(
 	client *http.Client,
-	queue queue.Queue,
-	stream stream.Stream,
+	generator generator.Generator,
 	consumedSegments, consumedRecords metrics.Counter,
 	replicatedSegments, replicatedRecords metrics.Counter,
 	logger log.Logger,
 ) *Consumer {
-	return &Consumer{
+	consumer := &Consumer{
 		mutex:              sync.Mutex{},
 		client:             client,
-		queue:              queue,
-		stream:             stream,
+		generator:          generator,
 		gatherErrors:       0,
 		stop:               make(chan chan struct{}),
 		consumedSegments:   consumedSegments,
@@ -59,6 +58,10 @@ func New(
 		gatherWaitTime:     defaultWaitTime,
 		logger:             logger,
 	}
+
+	consumer.lru = lru.NewLRU(100, consumer.onElementEviction)
+
+	return consumer
 }
 
 // Run consumes segments from the queue, and replicates them to the endpoint.
@@ -74,9 +77,7 @@ func (c *Consumer) Run() {
 			state = state()
 
 		case q := <-c.stop:
-			if err := c.stream.Failed(stream.All()); err != nil {
-				level.Warn(c.logger).Log("state", "stopping", "err", err)
-			}
+			c.lru.Purge()
 			close(q)
 			return
 		}
@@ -104,7 +105,7 @@ func (c *Consumer) gather() stateFn {
 
 	// A naïve way to break out of the gather loop in atypical conditions.
 	if c.gatherErrors > 0 {
-		if c.stream.Len() == 0 {
+		if c.lru.Len() == 0 {
 			// We didn't successfully consume any segments.
 			// Nothing to do but reset and try again.
 			c.gatherErrors = 0
@@ -116,27 +117,17 @@ func (c *Consumer) gather() stateFn {
 	}
 
 	// More typical exit clauses.
-	if c.stream.Capacity() {
+	if c.lru.Capacity() {
 		return c.replicate
 	}
 
-	segment, err := c.queue.Dequeue()
-	if err != nil {
-		// Normal, when the ingester has no more segments to give right now.
-		// after enough of these errors, we should replicate
-		warn.Log("reason", "dequeuing", "err", err)
-		c.gatherErrors++
-		return c.gather
-	}
+	// Dequeue
+	record := <-c.generator.Dequeue()
 
-	if err := c.stream.Append(segment); err != nil {
-		warn.Log("reason", "appending records", "err", err)
-		c.gatherErrors++
-		return c.failure
-	}
+	c.lru.Add(record.ID(), record)
 
 	c.consumedSegments.Inc()
-	c.consumedRecords.Add(float64(segment.Size()))
+	c.consumedRecords.Add(float64(1))
 
 	return c.gather
 }
@@ -147,50 +138,60 @@ func (c *Consumer) replicate() stateFn {
 		warn = level.Warn(base)
 	)
 
-	replicated := stream.NewQuery()
+	dequeued, err := c.lru.Dequeue(func(key lru.Key, value lru.Value) error {
+		record := value.(generator.Record)
+		return c.client.Send(record.Body())
+	})
 
-	// Replicate the records to the endpoint
-	if err := c.stream.Walk(func(segment queue.Segment) error {
-		var ids []uuid.UUID
-
-		err := segment.Walk(func(record queue.Record) error {
-			if err := c.client.Send(record.Body); err != nil {
-				return err
+	// even if we err out, we should send them in a transaction
+	go func() {
+		var txn generator.Transaction
+		for _, v := range dequeued {
+			if err := txn.Push(v.ID(), v.Receipt()); err != nil {
+				continue
 			}
+		}
+		if _, err := c.generator.Commit(txn); err != nil {
+			warn.Log("state", "replicate", "err", err)
+		}
+	}()
 
-			// Append only when replicated
-			ids = append(ids, record.ID)
-			return nil
-		})
-
-		// Replicate any IDs that was successful
-		replicated.Set(segment.ID(), ids[0:])
-		return err
-	}); err != nil {
+	if err != nil {
 		warn.Log("state", "replicate", "err", err)
 		return c.failure
 	}
 
-	// All good!
 	c.replicatedSegments.Inc()
-	c.replicatedRecords.Add(float64(replicated.Len()))
-
-	if err := c.stream.Commit(replicated); err != nil {
-		warn.Log("err", err)
-	}
+	c.replicatedRecords.Add(float64(len(dequeued)))
 
 	return c.gather
 }
 
 func (c *Consumer) failure() stateFn {
 	var (
-		base = log.With(c.logger, "state", "failure")
+		base = log.With(c.logger, "state", "replicate")
 		warn = level.Warn(base)
 	)
 
-	if err := c.stream.Failed(stream.All()); err != nil {
-		warn.Log("err", err)
+	var txn generator.Transaction
+	for _, v := range c.lru.Slice() {
+		if err := txn.Push(v.ID(), v.Receipt()); err != nil {
+			continue
+		}
+	}
+	if _, err := c.generator.Failed(txn); err != nil {
+		warn.Log("state", "failure", "err", err)
+		goto PURGE
 	}
 
+	c.failedSegments.Inc()
+	c.failedRecords.Add(float64(txn.Len()))
+
+PURGE:
+	c.lru.Purge()
 	return c.gather
+}
+
+func (c *Consumer) onElementEviction(key lru.Key, value lru.Value) {
+	// We should fail the transaction
 }

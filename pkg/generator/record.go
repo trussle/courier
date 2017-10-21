@@ -10,6 +10,7 @@ func (r Receipt) String() string {
 
 type Record interface {
 	ID() uuid.UUID
+	Body() []byte
 	Receipt() Receipt
 	Commit(Transaction) error
 	Failed(Transaction) error

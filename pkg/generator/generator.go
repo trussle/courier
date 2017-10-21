@@ -5,7 +5,7 @@ type Generator interface {
 
 	Stop()
 
-	Watch() <-chan Record
+	Dequeue() <-chan Record
 
 	Commit(Transaction) (Result, error)
 

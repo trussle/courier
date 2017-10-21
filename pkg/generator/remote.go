@@ -40,7 +40,7 @@ func newRemoteGenerator(config *RemoteConfig, logger log.Logger) Generator {
 	}
 }
 
-func (v *remoteGenerator) Watch() <-chan Record {
+func (v *remoteGenerator) Dequeue() <-chan Record {
 	return v.records
 }
 
@@ -128,6 +128,8 @@ func (v *remoteGenerator) Commit(txn Transaction) (Result, error) {
 		return Result{}, err
 	}
 
+	// Firehose here!
+
 	return Result{
 		Success: len(output.Successful),
 		Failure: len(output.Failed),
@@ -209,6 +211,10 @@ func (r *remoteRecord) ID() uuid.UUID {
 
 func (r *remoteRecord) Receipt() Receipt {
 	return r.receipt
+}
+
+func (r *remoteRecord) Body() []byte {
+	return r.body
 }
 
 func (r *remoteRecord) Commit(txn Transaction) error {

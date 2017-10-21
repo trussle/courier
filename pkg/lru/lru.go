@@ -110,6 +110,10 @@ func (l *LRU) Len() int {
 	return l.list.Len()
 }
 
+func (l *LRU) Capacity() bool {
+	return l.size == l.Len()
+}
+
 func (l *LRU) Slice() []KeyValue {
 	var (
 		index  int

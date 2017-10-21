@@ -6,7 +6,7 @@ func newNopGenerator() Generator {
 	return &nopGenerator{}
 }
 
-func (nopGenerator) Watch() <-chan Record {
+func (nopGenerator) Dequeue() <-chan Record {
 	return make(chan Record)
 }
 

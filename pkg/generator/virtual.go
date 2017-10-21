@@ -18,7 +18,7 @@ func newVirtualGenerator(freq time.Duration, fn func() Record) Generator {
 	}
 }
 
-func (v *virtualGenerator) Watch() <-chan Record {
+func (v *virtualGenerator) Dequeue() <-chan Record {
 	return v.records
 }
 
