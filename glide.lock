@@ -1,10 +1,10 @@
-hash: 98df4d6760bce9805bdcc79d573042c9bcdd26e8ee3a7b95dd737025f31330a3
-updated: 2017-10-09T12:22:16.049655728+01:00
+hash: 3a856b434c410323dec00140932884976de5929197fef3855643bea5e134ecef
+updated: 2017-10-21T20:45:27.651043953+01:00
 imports:
 - name: github.com/armon/go-metrics
-  version: 9a4b6e10bed6220a1665955aa2b75afc91eb10b3
+  version: f036747b9d0e8590f175a5d654a2194a7d9df4b5
 - name: github.com/aws/aws-sdk-go
-  version: c50726d857a24a2b3df8f731b3cfe57b1b4d3a98
+  version: c540f71042296fdb368ba8b52eba5d086c413514
   subpackages:
   - aws
   - aws/awserr
@@ -24,10 +24,15 @@ imports:
   - aws/signer/v4
   - internal/shareddefaults
   - private/protocol
+  - private/protocol/json/jsonutil
+  - private/protocol/jsonrpc
   - private/protocol/query
   - private/protocol/query/queryutil
   - private/protocol/rest
+  - private/protocol/restxml
   - private/protocol/xml/xmlutil
+  - service/firehose
+  - service/s3
   - service/sqs
   - service/sts
 - name: github.com/beorn7/perks
@@ -35,42 +40,42 @@ imports:
   subpackages:
   - quantile
 - name: github.com/go-ini/ini
-  version: c787282c39ac1fc618827141a1f762240def08a3
+  version: 5b3e00af70a9484542169a976dcab8d03e601a17
 - name: github.com/go-kit/kit
-  version: 4dc7be5d2d12881735283bcab7352178e190fc71
+  version: d67bb4c202e3b91377d1079b110a6c9ce23ab2f8
   subpackages:
   - log
   - log/level
 - name: github.com/go-logfmt/logfmt
   version: 390ab7935ee28ec6b286364bba9b4dd6410cb3d5
 - name: github.com/go-stack/stack
-  version: 817915b46b97fd7bb80e8ab6b69f01a53ac3eebf
+  version: 7a2f19628aabfe68f0766b59e74d6315f8347d22
 - name: github.com/golang/mock
-  version: 4887ba10eac80f57bfb3de234db4ac970d786511
+  version: 13f360950a79f5864a972c786a10a50e44b69541
   subpackages:
   - gomock
 - name: github.com/golang/protobuf
-  version: 130e6b02ab059e7b717a096f397c5b60111cae74
+  version: 748d386b5c1ea99658fd69fe9f03991ce86a90c1
   subpackages:
   - proto
 - name: github.com/gorilla/mux
-  version: bdd5a5a1b0b489d297b73eb62b5f6328df198bfc
+  version: 24fca303ac6da784b9e8269f724ddeb0b2eea5e7
 - name: github.com/jmespath/go-jmespath
   version: bd40a432e4c76585ef6b72d3fd96fb9b6dc7b68d
 - name: github.com/kr/logfmt
   version: b84e30acd515aadc4b783ad4ff83aff3299bdfe0
 - name: github.com/lib/pq
-  version: b77235e3890a962fe8a6f8c4c7198679ca7814e7
+  version: 91f10e40ba0dd2d0bf9f93ec1d4077711a78df88
 - name: github.com/matttproud/golang_protobuf_extensions
   version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
 - name: github.com/pborman/uuid
-  version: e790cca94e6cc75c7064b1332e63811d4aae1a53
+  version: 1b00554d822231195d1babd97ff4a781231955c9
 - name: github.com/pkg/errors
-  version: 2b3a18b5f0fb6b4f9190549597d3f962c02bc5eb
+  version: c605e284fe17294bda444b34710735b29d1a9d90
 - name: github.com/prometheus/client_golang
-  version: 5cec1d0429b02e4323e042eb04dafdb079ddf568
+  version: 94ff84a9a6ebb5e6eb9172897c221a64df3443bc
   subpackages:
   - prometheus
   - prometheus/promhttp
@@ -79,7 +84,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 1bab55dd05dbff384524a6a1c99006d9eb5f139b
+  version: 3e6a7635bac6573d43f49f97b47eb9bda195dba8
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -89,13 +94,19 @@ imports:
   subpackages:
   - xfs
 - name: github.com/prometheus/prometheus
-  version: abf7c975c9ac1606bf22da14097ece00bd08f577
+  version: bc2e9459d817afb763199929e615ac9ea5928cb1
 - name: github.com/SimonRichardson/betwixt
   version: 6bf309fe8d963cc635eeabbf73d82430c72761e5
 - name: github.com/SimonRichardson/gexec
   version: 51d581347cd0cbd0df9c2787c91af8a16af0d74e
+- name: github.com/SimonRichardson/resilience
+  version: c9b80ae73fd9af041322eb84924538df18dfa9a5
+  subpackages:
+  - breaker
+  - clock
+  - timer
 - name: github.com/trussle/fsys
-  version: 6b6126fd354aee107494d19c7363a5a926ce70d7
+  version: 182e67f78d3ce14f6ad30c95bbf7ac09393a8c2f
   subpackages:
   - ioext
   - lock
