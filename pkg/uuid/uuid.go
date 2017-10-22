@@ -126,8 +126,8 @@ func (UUID) Generate(r *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(id)
 }
 
-// Equals checks that UUID equate to each other.
-func (u UUID) Equals(id UUID) bool {
+// Equal checks that UUID equate to each other.
+func (u UUID) Equal(id UUID) bool {
 	for i := 0; i < EncodedSize; i++ {
 		if u[i] != id[i] {
 			return false

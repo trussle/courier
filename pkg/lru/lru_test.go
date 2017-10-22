@@ -1,68 +1,90 @@
 package lru_test
 
 import (
+	"errors"
+	"math/rand"
 	"reflect"
 	"testing"
+	"testing/quick"
+	"time"
+
+	"github.com/trussle/courier/pkg/models"
+	"github.com/trussle/courier/pkg/queue"
 
 	"github.com/trussle/courier/pkg/lru"
+	"github.com/trussle/courier/pkg/uuid"
 )
 
 func TestLRU_Add(t *testing.T) {
 	t.Parallel()
 
 	t.Run("adding with eviction", func(t *testing.T) {
-		evictted := 0
-		onEviction := func(k lru.Key, v lru.Value) {
-			if expected, actual := 1, k; expected != actual {
+		fn := func(id0, id1 uuid.UUID, rec0, rec1 TestRecord) bool {
+			evictted := 0
+			onEviction := func(k uuid.UUID, v queue.Record) {
+				if expected, actual := id0, k; !expected.Equal(actual) {
+					t.Errorf("expected: %v, actual: %v", expected, actual)
+				}
+
+				evictted += 1
+			}
+
+			l := lru.NewLRU(1, onEviction)
+
+			if expected, actual := false, l.Add(id0, rec0); expected != actual {
+				t.Errorf("expected: %t, actual: %t", expected, actual)
+			}
+			if expected, actual := true, l.Add(id1, rec1); expected != actual {
+				t.Errorf("expected: %t, actual: %t", expected, actual)
+			}
+			if expected, actual := 1, evictted; expected != actual {
+				t.Errorf("expected: %d, actual: %d", expected, actual)
+			}
+			if expected, actual := 1, l.Len(); expected != actual {
 				t.Errorf("expected: %d, actual: %d", expected, actual)
 			}
 
-			evictted += 1
-		}
+			values := []lru.KeyValue{
+				lru.KeyValue{id1, rec1},
+			}
+			if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
 
-		l := lru.NewLRU(1, onEviction)
-
-		if expected, actual := false, l.Add(1, 1); expected != actual {
-			t.Errorf("expected: %t, actual: %t", expected, actual)
+			return true
 		}
-		if expected, actual := true, l.Add(2, 2); expected != actual {
-			t.Errorf("expected: %t, actual: %t", expected, actual)
-		}
-		if expected, actual := 1, evictted; expected != actual {
-			t.Errorf("expected: %d, actual: %d", expected, actual)
-		}
-		if expected, actual := 1, l.Len(); expected != actual {
-			t.Errorf("expected: %d, actual: %d", expected, actual)
-		}
-
-		values := []lru.KeyValue{
-			lru.KeyValue{2, 2},
-		}
-		if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
-			t.Errorf("expected: %v, actual: %v", expected, actual)
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
 		}
 	})
 
 	t.Run("adding sorts keys", func(t *testing.T) {
-		onEviction := func(k lru.Key, v lru.Value) {
-			t.Fatal("failed if called")
+		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2, rec3 TestRecord) bool {
+			onEviction := func(k uuid.UUID, v queue.Record) {
+				t.Fatal("failed if called")
+			}
+
+			l := lru.NewLRU(3, onEviction)
+
+			l.Add(id0, rec0)
+			l.Add(id1, rec1)
+			l.Add(id2, rec2)
+
+			l.Add(id0, rec3)
+
+			values := []lru.KeyValue{
+				lru.KeyValue{id1, rec1},
+				lru.KeyValue{id2, rec2},
+				lru.KeyValue{id0, rec3},
+			}
+			if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+
+			return true
 		}
-
-		l := lru.NewLRU(3, onEviction)
-
-		l.Add(1, 1)
-		l.Add(2, 2)
-		l.Add(3, 3)
-
-		l.Add(1, 4)
-
-		values := []lru.KeyValue{
-			lru.KeyValue{2, 2},
-			lru.KeyValue{3, 3},
-			lru.KeyValue{1, 4},
-		}
-		if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
-			t.Errorf("expected: %v, actual: %v", expected, actual)
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
 		}
 	})
 }
@@ -71,46 +93,60 @@ func TestLRU_Get(t *testing.T) {
 	t.Parallel()
 
 	t.Run("get", func(t *testing.T) {
-		onEviction := func(k lru.Key, v lru.Value) {
-			t.Fatal("failed if called")
+		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
+			onEviction := func(k uuid.UUID, v queue.Record) {
+				t.Fatal("failed if called")
+			}
+
+			l := lru.NewLRU(3, onEviction)
+
+			l.Add(id0, rec0)
+			l.Add(id1, rec1)
+			l.Add(id2, rec2)
+
+			value, ok := l.Get(id0)
+
+			if expected, actual := true, ok; expected != actual {
+				t.Errorf("expected: %t, actual: %t", expected, actual)
+			}
+			if expected, actual := rec0, value; !expected.Equal(actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+
+			return true
 		}
-
-		l := lru.NewLRU(3, onEviction)
-
-		l.Add(1, 1)
-		l.Add(2, 2)
-		l.Add(3, 3)
-
-		value, ok := l.Get(1)
-
-		if expected, actual := true, ok; expected != actual {
-			t.Errorf("expected: %t, actual: %t", expected, actual)
-		}
-		if expected, actual := 1, value; expected != actual {
-			t.Errorf("expected: %d, actual: %d", expected, actual)
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
 		}
 	})
 
 	t.Run("get sorts keys", func(t *testing.T) {
-		onEviction := func(k lru.Key, v lru.Value) {
-			t.Fatal("failed if called")
+		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
+			onEviction := func(k uuid.UUID, v queue.Record) {
+				t.Fatal("failed if called")
+			}
+
+			l := lru.NewLRU(3, onEviction)
+
+			l.Add(id0, rec0)
+			l.Add(id1, rec1)
+			l.Add(id2, rec2)
+
+			l.Get(id0)
+
+			values := []lru.KeyValue{
+				lru.KeyValue{id1, rec1},
+				lru.KeyValue{id2, rec2},
+				lru.KeyValue{id0, rec0},
+			}
+			if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+
+			return true
 		}
-
-		l := lru.NewLRU(3, onEviction)
-
-		l.Add(1, 1)
-		l.Add(2, 2)
-		l.Add(3, 3)
-
-		l.Get(1)
-
-		values := []lru.KeyValue{
-			lru.KeyValue{2, 2},
-			lru.KeyValue{3, 3},
-			lru.KeyValue{1, 1},
-		}
-		if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
-			t.Errorf("expected: %v, actual: %v", expected, actual)
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
 		}
 	})
 }
@@ -119,46 +155,60 @@ func TestLRU_Peek(t *testing.T) {
 	t.Parallel()
 
 	t.Run("peek", func(t *testing.T) {
-		onEviction := func(k lru.Key, v lru.Value) {
-			t.Fatal("failed if called")
+		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
+			onEviction := func(k uuid.UUID, v queue.Record) {
+				t.Fatal("failed if called")
+			}
+
+			l := lru.NewLRU(3, onEviction)
+
+			l.Add(id0, rec0)
+			l.Add(id1, rec1)
+			l.Add(id2, rec2)
+
+			value, ok := l.Peek(id0)
+
+			if expected, actual := true, ok; expected != actual {
+				t.Errorf("expected: %t, actual: %t", expected, actual)
+			}
+			if expected, actual := rec0, value; !expected.Equal(actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+
+			return true
 		}
-
-		l := lru.NewLRU(3, onEviction)
-
-		l.Add(1, 1)
-		l.Add(2, 2)
-		l.Add(3, 3)
-
-		value, ok := l.Peek(1)
-
-		if expected, actual := true, ok; expected != actual {
-			t.Errorf("expected: %t, actual: %t", expected, actual)
-		}
-		if expected, actual := 1, value; expected != actual {
-			t.Errorf("expected: %d, actual: %d", expected, actual)
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
 		}
 	})
 
 	t.Run("peek does not sorts keys", func(t *testing.T) {
-		onEviction := func(k lru.Key, v lru.Value) {
-			t.Fatal("failed if called")
+		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
+			onEviction := func(k uuid.UUID, v queue.Record) {
+				t.Fatal("failed if called")
+			}
+
+			l := lru.NewLRU(3, onEviction)
+
+			l.Add(id0, rec0)
+			l.Add(id1, rec1)
+			l.Add(id2, rec2)
+
+			l.Peek(id0)
+
+			values := []lru.KeyValue{
+				lru.KeyValue{id0, rec0},
+				lru.KeyValue{id1, rec1},
+				lru.KeyValue{id2, rec2},
+			}
+			if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+
+			return true
 		}
-
-		l := lru.NewLRU(3, onEviction)
-
-		l.Add(1, 1)
-		l.Add(2, 2)
-		l.Add(3, 3)
-
-		l.Peek(1)
-
-		values := []lru.KeyValue{
-			lru.KeyValue{1, 1},
-			lru.KeyValue{2, 2},
-			lru.KeyValue{3, 3},
-		}
-		if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
-			t.Errorf("expected: %v, actual: %v", expected, actual)
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
 		}
 	})
 }
@@ -167,37 +217,52 @@ func TestLRU_Contains(t *testing.T) {
 	t.Parallel()
 
 	t.Run("contains", func(t *testing.T) {
-		onEviction := func(k lru.Key, v lru.Value) {
-			t.Fatal("failed if called")
+		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
+			onEviction := func(k uuid.UUID, v queue.Record) {
+				t.Fatal("failed if called")
+			}
+
+			l := lru.NewLRU(3, onEviction)
+
+			l.Add(id0, rec0)
+			l.Add(id1, rec1)
+			l.Add(id2, rec2)
+
+			ok := l.Contains(id1)
+
+			if expected, actual := true, ok; expected != actual {
+				t.Errorf("expected: %t, actual: %t", expected, actual)
+			}
+
+			return true
 		}
-
-		l := lru.NewLRU(3, onEviction)
-
-		l.Add(1, 1)
-		l.Add(2, 2)
-		l.Add(3, 3)
-
-		ok := l.Contains(2)
-
-		if expected, actual := true, ok; expected != actual {
-			t.Errorf("expected: %t, actual: %t", expected, actual)
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
 		}
 	})
+
 	t.Run("does not contains", func(t *testing.T) {
-		onEviction := func(k lru.Key, v lru.Value) {
-			t.Fatal("failed if called")
+		fn := func(id0, id1, id2, id3 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
+			onEviction := func(k uuid.UUID, v queue.Record) {
+				t.Fatal("failed if called")
+			}
+
+			l := lru.NewLRU(3, onEviction)
+
+			l.Add(id0, rec0)
+			l.Add(id1, rec1)
+			l.Add(id2, rec2)
+
+			ok := l.Contains(id3)
+
+			if expected, actual := false, ok; expected != actual {
+				t.Errorf("expected: %t, actual: %t", expected, actual)
+			}
+
+			return true
 		}
-
-		l := lru.NewLRU(3, onEviction)
-
-		l.Add(1, 1)
-		l.Add(2, 2)
-		l.Add(3, 3)
-
-		ok := l.Contains(6)
-
-		if expected, actual := false, ok; expected != actual {
-			t.Errorf("expected: %t, actual: %t", expected, actual)
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
 		}
 	})
 }
@@ -206,33 +271,40 @@ func TestLRU_Remove(t *testing.T) {
 	t.Parallel()
 
 	t.Run("removes key value pair", func(t *testing.T) {
-		evictted := 0
-		onEviction := func(k lru.Key, v lru.Value) {
-			if expected, actual := 1, k; expected != actual {
+		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
+			evictted := 0
+			onEviction := func(k uuid.UUID, v queue.Record) {
+				if expected, actual := id0, k; !expected.Equal(actual) {
+					t.Errorf("expected: %v, actual: %v", expected, actual)
+				}
+
+				evictted += 1
+			}
+
+			l := lru.NewLRU(3, onEviction)
+
+			l.Add(id0, rec0)
+			l.Add(id1, rec1)
+			l.Add(id2, rec2)
+
+			l.Remove(id0)
+
+			if expected, actual := 1, evictted; expected != actual {
 				t.Errorf("expected: %d, actual: %d", expected, actual)
 			}
 
-			evictted += 1
+			values := []lru.KeyValue{
+				lru.KeyValue{id1, rec1},
+				lru.KeyValue{id2, rec2},
+			}
+			if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+
+			return true
 		}
-
-		l := lru.NewLRU(3, onEviction)
-
-		l.Add(1, 1)
-		l.Add(2, 2)
-		l.Add(3, 3)
-
-		l.Remove(1)
-
-		if expected, actual := 1, evictted; expected != actual {
-			t.Errorf("expected: %d, actual: %d", expected, actual)
-		}
-
-		values := []lru.KeyValue{
-			lru.KeyValue{2, 2},
-			lru.KeyValue{3, 3},
-		}
-		if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
-			t.Errorf("expected: %v, actual: %v", expected, actual)
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
 		}
 	})
 }
@@ -241,7 +313,7 @@ func TestLRU_Pop(t *testing.T) {
 	t.Parallel()
 
 	t.Run("pop on empty", func(t *testing.T) {
-		onEviction := func(k lru.Key, v lru.Value) {
+		onEviction := func(k uuid.UUID, v queue.Record) {
 			t.Fatal("failed if called")
 		}
 
@@ -255,66 +327,80 @@ func TestLRU_Pop(t *testing.T) {
 	})
 
 	t.Run("pop", func(t *testing.T) {
-		evictted := 0
-		onEviction := func(k lru.Key, v lru.Value) {
-			if expected, actual := 1, k; expected != actual {
+		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
+			evictted := 0
+			onEviction := func(k uuid.UUID, v queue.Record) {
+				if expected, actual := id0, k; !expected.Equal(actual) {
+					t.Errorf("expected: %v, actual: %v", expected, actual)
+				}
+
+				evictted += 1
+			}
+
+			l := lru.NewLRU(3, onEviction)
+
+			l.Add(id0, rec0)
+			l.Add(id1, rec1)
+			l.Add(id2, rec2)
+
+			key, value, ok := l.Pop()
+
+			if expected, actual := 1, evictted; expected != actual {
 				t.Errorf("expected: %d, actual: %d", expected, actual)
 			}
 
-			evictted += 1
+			if expected, actual := true, ok; expected != actual {
+				t.Errorf("expected: %t, actual: %t", expected, actual)
+			}
+			if expected, actual := id0, key; !expected.Equal(actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+			if expected, actual := rec0, value; !expected.Equal(actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+
+			return true
 		}
-
-		l := lru.NewLRU(3, onEviction)
-
-		l.Add(1, 1)
-		l.Add(2, 2)
-		l.Add(3, 3)
-
-		key, value, ok := l.Pop()
-
-		if expected, actual := 1, evictted; expected != actual {
-			t.Errorf("expected: %d, actual: %d", expected, actual)
-		}
-
-		if expected, actual := true, ok; expected != actual {
-			t.Errorf("expected: %t, actual: %t", expected, actual)
-		}
-		if expected, actual := 1, key; expected != actual {
-			t.Errorf("expected: %d, actual: %d", expected, actual)
-		}
-		if expected, actual := 1, value; expected != actual {
-			t.Errorf("expected: %d, actual: %d", expected, actual)
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
 		}
 	})
 
 	t.Run("pop results", func(t *testing.T) {
-		evictted := 0
-		onEviction := func(k lru.Key, v lru.Value) {
-			if expected, actual := 1, k; expected != actual {
+		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
+			evictted := 0
+			onEviction := func(k uuid.UUID, v queue.Record) {
+				if expected, actual := id0, k; !expected.Equal(actual) {
+					t.Errorf("expected: %v, actual: %v", expected, actual)
+				}
+
+				evictted += 1
+			}
+
+			l := lru.NewLRU(3, onEviction)
+
+			l.Add(id0, rec0)
+			l.Add(id1, rec1)
+			l.Add(id2, rec2)
+
+			l.Pop()
+
+			if expected, actual := 1, evictted; expected != actual {
 				t.Errorf("expected: %d, actual: %d", expected, actual)
 			}
 
-			evictted += 1
+			values := []lru.KeyValue{
+				lru.KeyValue{id1, rec1},
+				lru.KeyValue{id2, rec2},
+			}
+			if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+
+			return true
 		}
-
-		l := lru.NewLRU(3, onEviction)
-
-		l.Add(1, 1)
-		l.Add(2, 2)
-		l.Add(3, 3)
-
-		l.Pop()
-
-		if expected, actual := 1, evictted; expected != actual {
-			t.Errorf("expected: %d, actual: %d", expected, actual)
-		}
-
-		values := []lru.KeyValue{
-			lru.KeyValue{2, 2},
-			lru.KeyValue{3, 3},
-		}
-		if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
-			t.Errorf("expected: %v, actual: %v", expected, actual)
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
 		}
 	})
 }
@@ -323,34 +409,40 @@ func TestLRU_Purge(t *testing.T) {
 	t.Parallel()
 
 	t.Run("purge", func(t *testing.T) {
-		evictted := 0
-		onEviction := func(k lru.Key, v lru.Value) {
-			evictted += 1
+		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
+			evictted := 0
+			onEviction := func(k uuid.UUID, v queue.Record) {
+				evictted += 1
+			}
+
+			l := lru.NewLRU(3, onEviction)
+
+			l.Add(id0, rec0)
+			l.Add(id1, rec1)
+			l.Add(id2, rec2)
+
+			values := []lru.KeyValue{
+				lru.KeyValue{id0, rec0},
+				lru.KeyValue{id1, rec1},
+				lru.KeyValue{id2, rec2},
+			}
+			if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+
+			l.Purge()
+
+			if expected, actual := 3, evictted; expected != actual {
+				t.Errorf("expected: %d, actual: %d", expected, actual)
+			}
+			values = []lru.KeyValue{}
+			if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+			return true
 		}
-
-		l := lru.NewLRU(3, onEviction)
-
-		l.Add(1, 1)
-		l.Add(2, 2)
-		l.Add(3, 3)
-
-		values := []lru.KeyValue{
-			lru.KeyValue{1, 1},
-			lru.KeyValue{2, 2},
-			lru.KeyValue{3, 3},
-		}
-		if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
-			t.Errorf("expected: %v, actual: %v", expected, actual)
-		}
-
-		l.Purge()
-
-		if expected, actual := 3, evictted; expected != actual {
-			t.Errorf("expected: %d, actual: %d", expected, actual)
-		}
-		values = []lru.KeyValue{}
-		if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
-			t.Errorf("expected: %v, actual: %v", expected, actual)
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
 		}
 	})
 }
@@ -359,25 +451,251 @@ func TestLRU_Keys(t *testing.T) {
 	t.Parallel()
 
 	t.Run("keys", func(t *testing.T) {
-		onEviction := func(k lru.Key, v lru.Value) {
-			t.Fatal("failed if called")
+		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
+			onEviction := func(k uuid.UUID, v queue.Record) {
+				t.Fatal("failed if called")
+			}
+
+			l := lru.NewLRU(3, onEviction)
+
+			l.Add(id0, rec0)
+			l.Add(id1, rec1)
+			l.Add(id2, rec2)
+
+			got := l.Keys()
+
+			values := []uuid.UUID{
+				id0,
+				id1,
+				id2,
+			}
+			if expected, actual := values, got; !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+			return true
 		}
-
-		l := lru.NewLRU(3, onEviction)
-
-		l.Add(1, 1)
-		l.Add(2, 2)
-		l.Add(3, 3)
-
-		got := l.Keys()
-
-		values := []lru.Key{
-			lru.Key(1),
-			lru.Key(2),
-			lru.Key(3),
-		}
-		if expected, actual := values, got; !reflect.DeepEqual(expected, actual) {
-			t.Errorf("expected: %v, actual: %v", expected, actual)
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
 		}
 	})
+
+	t.Run("keys after get", func(t *testing.T) {
+		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
+			onEviction := func(k uuid.UUID, v queue.Record) {
+				t.Fatal("failed if called")
+			}
+
+			l := lru.NewLRU(3, onEviction)
+
+			l.Add(id0, rec0)
+			l.Add(id1, rec1)
+			l.Add(id2, rec2)
+
+			l.Get(id0)
+
+			got := l.Keys()
+
+			values := []uuid.UUID{
+				id1,
+				id2,
+				id0,
+			}
+			if expected, actual := values, got; !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+			return true
+		}
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
+		}
+	})
+}
+
+func TestLRU_Dequeue(t *testing.T) {
+	t.Parallel()
+
+	t.Run("dequeue", func(t *testing.T) {
+		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
+			evictted := 0
+			onEviction := func(k uuid.UUID, v queue.Record) {
+				evictted += 1
+			}
+
+			l := lru.NewLRU(3, onEviction)
+
+			l.Add(id0, rec0)
+			l.Add(id1, rec1)
+			l.Add(id2, rec2)
+
+			values := []lru.KeyValue{
+				lru.KeyValue{id0, rec0},
+				lru.KeyValue{id1, rec1},
+				lru.KeyValue{id2, rec2},
+			}
+			if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+
+			got, err := l.Dequeue(func(key uuid.UUID, value queue.Record) error {
+				return nil
+			})
+			if expected, actual := true, err == nil; expected != actual {
+				t.Errorf("expected: %t, actual: %t", expected, actual)
+			}
+
+			if expected, actual := 3, evictted; expected != actual {
+				t.Errorf("expected: %d, actual: %d", expected, actual)
+			}
+			if expected, actual := values, got; !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+
+			values = []lru.KeyValue{}
+			if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+			return true
+		}
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
+		}
+	})
+
+	t.Run("dequeue with error", func(t *testing.T) {
+		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
+			evictted := 0
+			onEviction := func(k uuid.UUID, v queue.Record) {
+				evictted += 1
+			}
+
+			l := lru.NewLRU(3, onEviction)
+
+			l.Add(id0, rec0)
+			l.Add(id1, rec1)
+			l.Add(id2, rec2)
+
+			values := []lru.KeyValue{
+				lru.KeyValue{id0, rec0},
+				lru.KeyValue{id1, rec1},
+				lru.KeyValue{id2, rec2},
+			}
+			if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+
+			got, err := l.Dequeue(func(key uuid.UUID, value queue.Record) error {
+				if key.Equal(id1) {
+					return errors.New("bad")
+				}
+				return nil
+			})
+			if expected, actual := false, err == nil; expected != actual {
+				t.Errorf("expected: %t, actual: %t", expected, actual)
+			}
+
+			if expected, actual := 1, evictted; expected != actual {
+				t.Errorf("expected: %d, actual: %d", expected, actual)
+			}
+
+			values = []lru.KeyValue{
+				lru.KeyValue{id0, rec0},
+			}
+			if expected, actual := values, got; !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+
+			values = []lru.KeyValue{
+				lru.KeyValue{id1, rec1},
+				lru.KeyValue{id2, rec2},
+			}
+			if expected, actual := values, l.Slice(); !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+			return true
+		}
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
+		}
+	})
+}
+
+type TestRecord struct {
+	id        uuid.UUID
+	messageID string
+	receipt   models.Receipt
+	body      []byte
+	timestamp time.Time
+}
+
+func (t TestRecord) ID() uuid.UUID {
+	return t.id
+}
+
+func (t TestRecord) Body() []byte {
+	return t.body
+}
+
+func (t TestRecord) Receipt() models.Receipt {
+	return t.receipt
+}
+
+func (t TestRecord) Commit(txn models.Transaction) error {
+	return txn.Push(t.id, t.receipt)
+}
+
+func (t TestRecord) Failed(txn models.Transaction) error {
+	return txn.Push(t.id, t.receipt)
+}
+
+// Equal checks the equality of records against each other
+func (t TestRecord) Equal(other queue.Record) bool {
+	return t.ID().Equal(other.ID()) &&
+		reflect.DeepEqual(t.Body(), other.Body())
+}
+
+// Generate allows UUID to be used within quickcheck scenarios.
+func (TestRecord) Generate(r *rand.Rand, size int) reflect.Value {
+	rec, err := generate(r)
+	if err != nil {
+		panic(err)
+	}
+	return reflect.ValueOf(rec)
+}
+
+func generate(rnd *rand.Rand) (rec TestRecord, err error) {
+	if rec.id, err = uuid.New(rnd); err != nil {
+		return
+	}
+
+	// MessageID generation
+	{
+		dst := make([]byte, rnd.Intn(10)+20)
+		if _, err = rnd.Read(dst); err != nil {
+			return
+		}
+		rec.messageID = string(dst)
+	}
+
+	// Receipt generation
+	{
+		dst := make([]byte, rnd.Intn(10)+24)
+		if _, err = rnd.Read(dst); err != nil {
+			return
+		}
+		rec.receipt = models.Receipt(string(dst))
+	}
+
+	// Body generation
+	{
+		dst := make([]byte, rnd.Intn(10)+48)
+		if _, err = rnd.Read(dst); err != nil {
+			return
+		}
+		rec.body = dst
+	}
+
+	// Timestamp generation
+	rec.timestamp = time.Now().Round(time.Millisecond)
+
+	return
 }

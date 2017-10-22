@@ -72,7 +72,7 @@ func TestUUID(t *testing.T) {
 
 	t.Run("matches none", func(t *testing.T) {
 		fn := func(a, b UUID) bool {
-			return !a.Equals(b)
+			return !a.Equal(b)
 		}
 
 		if err := quick.Check(fn, nil); err != nil {
@@ -156,7 +156,7 @@ func TestUUID(t *testing.T) {
 				t.Error(err)
 			}
 
-			return res.Equals(id)
+			return res.Equal(id)
 		}
 
 		if err := quick.Check(fn, nil); err != nil {

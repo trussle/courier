@@ -1,18 +1,16 @@
 package lru
 
+import (
+	"github.com/trussle/courier/pkg/queue"
+	"github.com/trussle/courier/pkg/uuid"
+)
+
 type element struct {
-	key   Key
-	value Value
+	key   uuid.UUID
+	value queue.Record
 
 	next, prev *element
 	list       *list
-}
-
-func (e *element) Next() *element {
-	if n := e.next; e.list != nil && n != &e.list.root {
-		return n
-	}
-	return nil
 }
 
 func (e *element) Prev() *element {
@@ -44,16 +42,6 @@ func (l *list) Mark(e *element) {
 	l.insert(l.remove(e), &l.root)
 }
 
-// Pop removes the last element from the list
-func (l *list) Pop() *element {
-	if l.size == 0 {
-		return nil
-	}
-
-	e := l.root.prev
-	return l.remove(e)
-}
-
 // Remove removes an element from the list
 func (l *list) Remove(e *element) bool {
 	if e.list == l {
@@ -64,7 +52,7 @@ func (l *list) Remove(e *element) bool {
 }
 
 // Walk iterates over the list with a key, value
-func (l *list) Walk(fn func(Key, Value)) {
+func (l *list) Walk(fn func(uuid.UUID, queue.Record)) {
 	for elem := l.Back(); elem != nil; elem = elem.Prev() {
 		fn(elem.key, elem.value)
 	}
@@ -88,6 +76,16 @@ func (l *list) Back() *element {
 		return nil
 	}
 	return l.root.prev
+}
+
+// Dequeue walks over one item at a time, removing each one from the list
+func (l *list) Dequeue(fn func(elem *element) error) error {
+	for elem := l.Back(); elem != nil; elem = elem.Prev() {
+		if err := fn(elem); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (l *list) insert(e, ptr *element) *element {

@@ -24,33 +24,41 @@ build: dist/courier
 dist/courier:
 	go build -o dist/courier ${PATH_COURIER}/cmd/courier
 
+pkg/audit/mocks/log.go:
+	mockgen -package=mocks -destination=pkg/audit/mocks/log.go ${PATH_COURIER}/pkg/audit Log
+	$(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/audit/mocks/log.go
+
 pkg/metrics/mocks/metrics.go:
 	mockgen -package=mocks -destination=pkg/metrics/mocks/metrics.go ${PATH_COURIER}/pkg/metrics Gauge,HistogramVec,Counter
 	$(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/metrics/mocks/metrics.go
 
 pkg/metrics/mocks/observer.go:
 	mockgen -package=mocks -destination=pkg/metrics/mocks/observer.go github.com/prometheus/client_golang/prometheus Observer
+	$(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/metrics/mocks/observer.go
+
+pkg/models/mocks/transaction.go:
+	mockgen -package=mocks -destination=pkg/models/mocks/transaction.go ${PATH_COURIER}/pkg/models Transaction
+	$(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/models/mocks/transaction.go
 
 pkg/queue/mocks/queue.go:
-	mockgen -package=mocks -destination=pkg/queue/mocks/queue.go ${PATH_COURIER}/pkg/queue Queue,Segment
-
-pkg/stream/mocks/stream.go:
-	mockgen -package=mocks -destination=pkg/stream/mocks/stream.go ${PATH_COURIER}/pkg/stream Stream
-	$(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/stream/mocks/stream.go
+	mockgen -package=mocks -destination=pkg/queue/mocks/queue.go ${PATH_COURIER}/pkg/queue Queue
+	$(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/queue/mocks/queue.go
 
 .PHONY: build-mocks
 build-mocks: FORCE
+	$(MAKE) pkg/audit/mocks/log.go
 	$(MAKE) pkg/metrics/mocks/metrics.go
 	$(MAKE) pkg/metrics/mocks/observer.go
+	$(MAKE) pkg/models/mocks/transaction.go
 	$(MAKE) pkg/queue/mocks/queue.go
-	$(MAKE) pkg/stream/mocks/stream.go
 
 .PHONY: clean-mocks
 clean-mocks: FORCE
+	rm -f pkg/audit/mocks/log.go
 	rm -f pkg/metrics/mocks/metrics.go
 	rm -f pkg/metrics/mocks/observer.go
+	rm -f pkg/models/mocks/transaction.go
 	rm -f pkg/queue/mocks/queue.go
-	rm -f pkg/stream/mocks/stream.go
 
 .PHONY: clean
 clean: FORCE
@@ -64,7 +72,7 @@ unit-tests:
 
 .PHONY: integration-tests
 integration-tests:
-	docker-compose run courier go test -v -tags=integration ./cmd/... ./pkg/...
+	docker-compose run courier go test -v -tags=integration ./pkg/queue/...
 
 .PHONY: documentation
 documentation:

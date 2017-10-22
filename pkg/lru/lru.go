@@ -1,31 +1,38 @@
 package lru
 
-type Key interface{}
-type Value interface{}
+import (
+	"github.com/trussle/courier/pkg/queue"
+	"github.com/trussle/courier/pkg/uuid"
+)
+
 type KeyValue struct {
-	Key   Key
-	Value Value
+	Key   uuid.UUID
+	Value queue.Record
 }
 
-type EvictCallback func(Key, Value)
+// EvictCallback lets you know when an eviction has happened in the cache
+type EvictCallback func(uuid.UUID, queue.Record)
 
 // LRU implements a non-thread safe fixed size LRU cache
 type LRU struct {
 	size    int
-	items   map[Key]*element
+	items   map[uuid.UUID]*element
 	list    list
 	onEvict EvictCallback
 }
 
+// NewLRU creates a LRU cache with a size and callback on eviction
 func NewLRU(size int, onEvict EvictCallback) *LRU {
 	return &LRU{
 		size:    size,
-		items:   make(map[Key]*element),
+		items:   make(map[uuid.UUID]*element),
 		onEvict: onEvict,
 	}
 }
 
-func (l *LRU) Add(key Key, value Value) bool {
+// Add adds a key, value pair.
+// Returns true if an eviction happened.
+func (l *LRU) Add(key uuid.UUID, value queue.Record) bool {
 	if elem, ok := l.items[key]; ok {
 		l.list.Mark(elem)
 		elem.value = value
@@ -46,7 +53,9 @@ func (l *LRU) Add(key Key, value Value) bool {
 	return false
 }
 
-func (l *LRU) Get(key Key) (value Value, ok bool) {
+// Get returns back a value if it exists.
+// Returns true if found.
+func (l *LRU) Get(key uuid.UUID) (value queue.Record, ok bool) {
 	var elem *element
 	if elem, ok = l.items[key]; ok {
 		l.list.Mark(elem)
@@ -55,7 +64,9 @@ func (l *LRU) Get(key Key) (value Value, ok bool) {
 	return
 }
 
-func (l *LRU) Remove(key Key) (ok bool) {
+// Remove a value using it's key
+// Returns true if a removal happened
+func (l *LRU) Remove(key uuid.UUID) (ok bool) {
 	var elem *element
 	if elem, ok = l.items[key]; ok {
 		l.removeElement(elem)
@@ -63,7 +74,9 @@ func (l *LRU) Remove(key Key) (ok bool) {
 	return
 }
 
-func (l *LRU) Peek(key Key) (value Value, ok bool) {
+// Peek returns a value, without marking the LRU cache.
+// Returns true if a value is found.
+func (l *LRU) Peek(key uuid.UUID) (value queue.Record, ok bool) {
 	var elem *element
 	if elem, ok = l.items[key]; ok {
 		value = elem.value
@@ -71,21 +84,24 @@ func (l *LRU) Peek(key Key) (value Value, ok bool) {
 	return
 }
 
-func (l *LRU) Contains(key Key) bool {
+// Contains finds out if a key is present in the LRU cache
+func (l *LRU) Contains(key uuid.UUID) bool {
 	_, ok := l.items[key]
 	return ok
 }
 
-func (l *LRU) Pop() (Key, Value, bool) {
+// Pop removes the last LRU item with in the cache
+func (l *LRU) Pop() (uuid.UUID, queue.Record, bool) {
 	if elem := l.list.Back(); elem != nil {
 		l.removeElement(elem)
 		return elem.key, elem.value, true
 	}
-	return nil, nil, false
+	return uuid.Empty, nil, false
 }
 
+// Purge removes all items with in the cache, calling evict callback on each.
 func (l *LRU) Purge() {
-	l.list.Walk(func(key Key, value Value) {
+	l.list.Walk(func(key uuid.UUID, value queue.Record) {
 		if l.onEvict != nil {
 			l.onEvict(key, value)
 		}
@@ -94,32 +110,36 @@ func (l *LRU) Purge() {
 	l.list.Reset()
 }
 
-func (l *LRU) Keys() []Key {
+// Keys returns the keys as a slice
+func (l *LRU) Keys() []uuid.UUID {
 	var (
 		index int
-		keys  = make([]Key, l.list.Len())
+		keys  = make([]uuid.UUID, l.list.Len())
 	)
-	l.list.Walk(func(k Key, v Value) {
+	l.list.Walk(func(k uuid.UUID, v queue.Record) {
 		keys[index] = k
 		index++
 	})
 	return keys
 }
 
+// Len returns the current length of the LRU cache
 func (l *LRU) Len() int {
 	return l.list.Len()
 }
 
+// Capacity returns if the LRU cache is at capacity or not.
 func (l *LRU) Capacity() bool {
 	return l.size == l.Len()
 }
 
+// Slice returns a snapshot of the KeyValue pairs.
 func (l *LRU) Slice() []KeyValue {
 	var (
 		index  int
 		values = make([]KeyValue, l.list.Len())
 	)
-	l.list.Walk(func(k Key, v Value) {
+	l.list.Walk(func(k uuid.UUID, v queue.Record) {
 		values[index] = KeyValue{
 			Key:   k,
 			Value: v,
@@ -127,6 +147,28 @@ func (l *LRU) Slice() []KeyValue {
 		index++
 	})
 	return values
+}
+
+// Dequeue iterates over the LRU cache removing an item upon each iteration.
+func (l *LRU) Dequeue(fn func(uuid.UUID, queue.Record) error) ([]KeyValue, error) {
+	var dequeued []*element
+	err := l.list.Dequeue(func(e *element) error {
+		err := fn(e.key, e.value)
+		if err == nil {
+			dequeued = append(dequeued, e)
+		}
+		return err
+	})
+
+	res := make([]KeyValue, len(dequeued))
+	for k, e := range dequeued {
+		l.removeElement(e)
+		res[k] = KeyValue{
+			Key:   e.key,
+			Value: e.value,
+		}
+	}
+	return res, err
 }
 
 func (l *LRU) removeElement(e *element) {

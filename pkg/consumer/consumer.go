@@ -6,10 +6,13 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-	"github.com/trussle/courier/pkg/generator"
+	"github.com/trussle/courier/pkg/audit"
 	"github.com/trussle/courier/pkg/http"
 	"github.com/trussle/courier/pkg/lru"
 	"github.com/trussle/courier/pkg/metrics"
+	"github.com/trussle/courier/pkg/models"
+	"github.com/trussle/courier/pkg/queue"
+	"github.com/trussle/courier/pkg/uuid"
 )
 
 const (
@@ -23,7 +26,8 @@ const (
 type Consumer struct {
 	mutex              sync.Mutex
 	client             *http.Client
-	generator          generator.Generator
+	queue              queue.Queue
+	log                audit.Log
 	lru                *lru.LRU
 	gatherErrors       int
 	stop               chan chan struct{}
@@ -40,7 +44,8 @@ type Consumer struct {
 // New creates a consumer.
 func New(
 	client *http.Client,
-	generator generator.Generator,
+	queue queue.Queue,
+	log audit.Log,
 	consumedSegments, consumedRecords metrics.Counter,
 	replicatedSegments, replicatedRecords metrics.Counter,
 	logger log.Logger,
@@ -48,7 +53,8 @@ func New(
 	consumer := &Consumer{
 		mutex:              sync.Mutex{},
 		client:             client,
-		generator:          generator,
+		queue:              queue,
+		log:                log,
 		gatherErrors:       0,
 		stop:               make(chan chan struct{}),
 		consumedSegments:   consumedSegments,
@@ -122,7 +128,7 @@ func (c *Consumer) gather() stateFn {
 	}
 
 	// Dequeue
-	record := <-c.generator.Dequeue()
+	record := <-c.queue.Dequeue()
 
 	c.lru.Add(record.ID(), record)
 
@@ -138,20 +144,25 @@ func (c *Consumer) replicate() stateFn {
 		warn = level.Warn(base)
 	)
 
-	dequeued, err := c.lru.Dequeue(func(key lru.Key, value lru.Value) error {
-		record := value.(generator.Record)
-		return c.client.Send(record.Body())
+	dequeued, err := c.lru.Dequeue(func(key uuid.UUID, value queue.Record) error {
+		return c.client.Send(value.Body())
 	})
 
 	// even if we err out, we should send them in a transaction
 	go func() {
-		var txn generator.Transaction
+		var txn models.Transaction
 		for _, v := range dequeued {
-			if err := txn.Push(v.ID(), v.Receipt()); err != nil {
+			if err := txn.Push(v.Value.ID(), v.Value.Receipt()); err != nil {
 				continue
 			}
 		}
-		if _, err := c.generator.Commit(txn); err != nil {
+		if _, err := c.queue.Commit(txn); err != nil {
+			warn.Log("state", "replicate", "err", err)
+		}
+		if err := c.log.Append(txn); err != nil {
+			warn.Log("state", "replicate", "err", err)
+		}
+		if err := txn.Flush(); err != nil {
 			warn.Log("state", "replicate", "err", err)
 		}
 	}()
@@ -173,13 +184,13 @@ func (c *Consumer) failure() stateFn {
 		warn = level.Warn(base)
 	)
 
-	var txn generator.Transaction
+	var txn models.Transaction
 	for _, v := range c.lru.Slice() {
-		if err := txn.Push(v.ID(), v.Receipt()); err != nil {
+		if err := txn.Push(v.Value.ID(), v.Value.Receipt()); err != nil {
 			continue
 		}
 	}
-	if _, err := c.generator.Failed(txn); err != nil {
+	if _, err := c.queue.Failed(txn); err != nil {
 		warn.Log("state", "failure", "err", err)
 		goto PURGE
 	}
@@ -192,6 +203,6 @@ PURGE:
 	return c.gather
 }
 
-func (c *Consumer) onElementEviction(key lru.Key, value lru.Value) {
+func (c *Consumer) onElementEviction(key uuid.UUID, value queue.Record) {
 	// We should fail the transaction
 }
