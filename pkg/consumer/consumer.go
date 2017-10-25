@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SimonRichardson/resilience/retrier"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/trussle/courier/pkg/audit"
@@ -144,25 +145,13 @@ func (c *Consumer) replicate() stateFn {
 		warn = level.Warn(base)
 	)
 
-	dequeued, err := c.lru.Dequeue(func(key uuid.UUID, value queue.Record) error {
+	dequeued, err := c.lru.Dequeue(func(key uuid.UUID, value models.Record) error {
 		return c.client.Send(value.Body())
 	})
 
 	// even if we err out, we should send them in a transaction
 	go func() {
-		var txn models.Transaction
-		for _, v := range dequeued {
-			if err := txn.Push(v.Value.ID(), v.Value.Receipt()); err != nil {
-				continue
-			}
-		}
-		if _, err := c.queue.Commit(txn); err != nil {
-			warn.Log("state", "replicate", "err", err)
-		}
-		if err := c.log.Append(txn); err != nil {
-			warn.Log("state", "replicate", "err", err)
-		}
-		if err := txn.Flush(); err != nil {
+		if err := c.commit(dequeued); err != nil {
 			warn.Log("state", "replicate", "err", err)
 		}
 	}()
@@ -186,7 +175,7 @@ func (c *Consumer) failure() stateFn {
 
 	var txn models.Transaction
 	for _, v := range c.lru.Slice() {
-		if err := txn.Push(v.Value.ID(), v.Value.Receipt()); err != nil {
+		if err := txn.Push(v.Value.ID(), v.Value); err != nil {
 			continue
 		}
 	}
@@ -203,6 +192,31 @@ PURGE:
 	return c.gather
 }
 
-func (c *Consumer) onElementEviction(key uuid.UUID, value queue.Record) {
+func (c *Consumer) onElementEviction(key uuid.UUID, value models.Record) {
 	// We should fail the transaction
+	level.Warn(c.logger).Log("state", "eviction", "id", key.String(), "record", value.RecordID())
+}
+
+func (c *Consumer) commit(queue []lru.KeyValue) error {
+	var txn models.Transaction
+	for _, v := range queue {
+		if err := txn.Push(v.Value.ID(), v.Value); err != nil {
+			continue
+		}
+	}
+
+	// Try and append to the audit log, if it fails do nothing but continue.
+	try := retrier.New(3, 10*time.Millisecond)
+	if err := try.Run(func() error {
+		return c.log.Append(txn)
+	}); err != nil {
+		// do nothing here, we tried!
+		level.Error(c.logger).Log("state", "commit", "err", err)
+	}
+
+	if _, err := c.queue.Commit(txn); err != nil {
+		return err
+	}
+
+	return txn.Flush()
 }
