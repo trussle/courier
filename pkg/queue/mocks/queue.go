@@ -48,9 +48,9 @@ func (mr *MockQueueMockRecorder) Commit(arg0 interface{}) *gomock.Call {
 }
 
 // Dequeue mocks base method
-func (m *MockQueue) Dequeue() <-chan queue.Record {
+func (m *MockQueue) Dequeue() <-chan models.Record {
 	ret := m.ctrl.Call(m, "Dequeue")
-	ret0, _ := ret[0].(<-chan queue.Record)
+	ret0, _ := ret[0].(<-chan models.Record)
 	return ret0
 }
 
@@ -60,7 +60,7 @@ func (mr *MockQueueMockRecorder) Dequeue() *gomock.Call {
 }
 
 // Enqueue mocks base method
-func (m *MockQueue) Enqueue(arg0 queue.Record) error {
+func (m *MockQueue) Enqueue(arg0 models.Record) error {
 	ret := m.ctrl.Call(m, "Enqueue", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0

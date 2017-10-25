@@ -17,28 +17,21 @@ type TestRecord struct {
 	timestamp time.Time
 }
 
-func (t TestRecord) ID() uuid.UUID {
-	return t.id
-}
-
-func (t TestRecord) Body() []byte {
-	return t.body
-}
-
-func (t TestRecord) Receipt() models.Receipt {
-	return t.receipt
-}
+func (t TestRecord) ID() uuid.UUID           { return t.id }
+func (t TestRecord) Body() []byte            { return t.body }
+func (t TestRecord) RecordID() string        { return t.messageID }
+func (t TestRecord) Receipt() models.Receipt { return t.receipt }
 
 func (t TestRecord) Commit(txn models.Transaction) error {
-	return txn.Push(t.id, t.receipt)
+	return txn.Push(t.id, t)
 }
 
 func (t TestRecord) Failed(txn models.Transaction) error {
-	return txn.Push(t.id, t.receipt)
+	return txn.Push(t.id, t)
 }
 
 // Equal checks the equality of records against each other
-func (t TestRecord) Equal(other Record) bool {
+func (t TestRecord) Equal(other models.Record) bool {
 	return t.ID().Equal(other.ID()) &&
 		reflect.DeepEqual(t.Body(), other.Body())
 }

@@ -39,7 +39,7 @@ type remoteQueue struct {
 	visibilityTimeout   *int64
 	freq                time.Duration
 	stop                chan chan struct{}
-	records             chan Record
+	records             chan models.Record
 	randSource          *rand.Rand
 	logger              log.Logger
 }
@@ -89,13 +89,13 @@ func newRemoteQueue(config *RemoteConfig, logger log.Logger) (Queue, error) {
 		visibilityTimeout:   aws.Int64(int64(config.VisibilityTimeout)),
 		freq:                defaultRunFrequency,
 		stop:                make(chan chan struct{}),
-		records:             make(chan Record),
+		records:             make(chan models.Record, 1),
 		randSource:          rand.New(rand.NewSource(time.Now().UnixNano())),
 		logger:              logger,
 	}, nil
 }
 
-func (v *remoteQueue) Enqueue(rec Record) error {
+func (v *remoteQueue) Enqueue(rec models.Record) error {
 	input := &sqs.SendMessageInput{
 		MessageBody: aws.String(string(rec.Body())),
 		QueueUrl:    v.queueURL,
@@ -104,7 +104,7 @@ func (v *remoteQueue) Enqueue(rec Record) error {
 	return err
 }
 
-func (v *remoteQueue) Dequeue() <-chan Record {
+func (v *remoteQueue) Dequeue() <-chan models.Record {
 	return v.records
 }
 
@@ -129,7 +129,7 @@ func (v *remoteQueue) Run() {
 				continue
 			}
 
-			unique := make(map[string]Record, len(resp.Messages))
+			unique := make(map[string]models.Record, len(resp.Messages))
 			for _, msg := range resp.Messages {
 				id, e := uuid.New(v.randSource)
 				if e != nil {
@@ -164,8 +164,8 @@ func (v *remoteQueue) Stop() {
 
 func (v *remoteQueue) Commit(txn models.Transaction) (Result, error) {
 	records := make(map[uuid.UUID]models.Receipt)
-	if err := txn.Walk(func(id uuid.UUID, receipt models.Receipt) error {
-		records[id] = receipt
+	if err := txn.Walk(func(id uuid.UUID, record models.Record) error {
+		records[id] = record.Receipt()
 		return nil
 	}); err != nil {
 		return Result{}, err
@@ -202,7 +202,7 @@ func (v *remoteQueue) Failed(txn models.Transaction) (Result, error) {
 	return Result{}, nil
 }
 
-func (v *remoteQueue) changeMessageVisibility(records map[string]Record) error {
+func (v *remoteQueue) changeMessageVisibility(records map[string]models.Record) error {
 	// fast exit
 	if len(records) == 0 {
 		return nil
@@ -257,7 +257,7 @@ func newRemoteRecord(id uuid.UUID,
 	receipt models.Receipt,
 	body []byte,
 	receivedAt time.Time,
-) Record {
+) models.Record {
 	return &remoteRecord{
 		id:         id,
 		messageID:  messageID,
@@ -267,29 +267,22 @@ func newRemoteRecord(id uuid.UUID,
 	}
 }
 
-func (r *remoteRecord) ID() uuid.UUID {
-	return r.id
-}
+func (r *remoteRecord) ID() uuid.UUID           { return r.id }
+func (r *remoteRecord) Receipt() models.Receipt { return r.receipt }
+func (r *remoteRecord) RecordID() string        { return r.messageID }
+func (r *remoteRecord) Body() []byte            { return r.body }
 
-func (r *remoteRecord) Receipt() models.Receipt {
-	return r.receipt
-}
-
-func (r *remoteRecord) Body() []byte {
-	return r.body
-}
-
-func (r *remoteRecord) Equal(other Record) bool {
+func (r *remoteRecord) Equal(other models.Record) bool {
 	return r.ID().Equal(other.ID()) &&
 		reflect.DeepEqual(r.Body(), other.Body())
 }
 
 func (r *remoteRecord) Commit(txn models.Transaction) error {
-	return txn.Push(r.id, r.receipt)
+	return txn.Push(r.id, r)
 }
 
 func (r *remoteRecord) Failed(txn models.Transaction) error {
-	return txn.Push(r.id, r.receipt)
+	return txn.Push(r.id, r)
 }
 
 // ConfigOption defines a option for generating a RemoteConfig

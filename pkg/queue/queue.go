@@ -20,10 +20,10 @@ type Queue interface {
 	Stop()
 
 	// Enqueue a record
-	Enqueue(Record) error
+	Enqueue(models.Record) error
 
 	// Dequeue a record from the channel
-	Dequeue() <-chan Record
+	Dequeue() <-chan models.Record
 
 	// Commit a transaction containing the records, so that an ack can be sent
 	Commit(models.Transaction) (Result, error)
@@ -31,6 +31,11 @@ type Queue interface {
 	// Failed a transaction containing the records, so that potential retries can
 	// be used.
 	Failed(models.Transaction) (Result, error)
+}
+
+// Result returns the amount of successes and failures
+type Result struct {
+	Success, Failure int
 }
 
 // Config encapsulates the requirements for generating a Queue

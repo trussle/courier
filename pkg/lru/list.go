@@ -1,13 +1,13 @@
 package lru
 
 import (
-	"github.com/trussle/courier/pkg/queue"
+	"github.com/trussle/courier/pkg/models"
 	"github.com/trussle/courier/pkg/uuid"
 )
 
 type element struct {
 	key   uuid.UUID
-	value queue.Record
+	value models.Record
 
 	next, prev *element
 	list       *list
@@ -52,7 +52,7 @@ func (l *list) Remove(e *element) bool {
 }
 
 // Walk iterates over the list with a key, value
-func (l *list) Walk(fn func(uuid.UUID, queue.Record)) {
+func (l *list) Walk(fn func(uuid.UUID, models.Record)) {
 	for elem := l.Back(); elem != nil; elem = elem.Prev() {
 		fn(elem.key, elem.value)
 	}

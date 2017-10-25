@@ -40,6 +40,10 @@ pkg/models/mocks/transaction.go:
 	mockgen -package=mocks -destination=pkg/models/mocks/transaction.go ${PATH_COURIER}/pkg/models Transaction
 	$(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/models/mocks/transaction.go
 
+pkg/models/mocks/record.go:
+	mockgen -package=mocks -destination=pkg/models/mocks/record.go ${PATH_COURIER}/pkg/models Record
+	$(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/models/mocks/record.go
+
 pkg/queue/mocks/queue.go:
 	mockgen -package=mocks -destination=pkg/queue/mocks/queue.go ${PATH_COURIER}/pkg/queue Queue
 	$(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/queue/mocks/queue.go
@@ -49,6 +53,7 @@ build-mocks: FORCE
 	$(MAKE) pkg/audit/mocks/log.go
 	$(MAKE) pkg/metrics/mocks/metrics.go
 	$(MAKE) pkg/metrics/mocks/observer.go
+	$(MAKE) pkg/models/mocks/record.go
 	$(MAKE) pkg/models/mocks/transaction.go
 	$(MAKE) pkg/queue/mocks/queue.go
 
@@ -57,6 +62,7 @@ clean-mocks: FORCE
 	rm -f pkg/audit/mocks/log.go
 	rm -f pkg/metrics/mocks/metrics.go
 	rm -f pkg/metrics/mocks/observer.go
+	rm -f pkg/models/mocks/record.go
 	rm -f pkg/models/mocks/transaction.go
 	rm -f pkg/queue/mocks/queue.go
 

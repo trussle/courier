@@ -59,7 +59,7 @@ func (mr *MockTransactionMockRecorder) Len() *gomock.Call {
 }
 
 // Push mocks base method
-func (m *MockTransaction) Push(arg0 uuid.UUID, arg1 models.Receipt) error {
+func (m *MockTransaction) Push(arg0 uuid.UUID, arg1 models.Record) error {
 	ret := m.ctrl.Call(m, "Push", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
@@ -71,7 +71,7 @@ func (mr *MockTransactionMockRecorder) Push(arg0, arg1 interface{}) *gomock.Call
 }
 
 // Walk mocks base method
-func (m *MockTransaction) Walk(arg0 func(uuid.UUID, models.Receipt) error) error {
+func (m *MockTransaction) Walk(arg0 func(uuid.UUID, models.Record) error) error {
 	ret := m.ctrl.Call(m, "Walk", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0

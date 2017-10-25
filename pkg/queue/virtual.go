@@ -4,22 +4,22 @@ import "github.com/trussle/courier/pkg/models"
 
 type virtualQueue struct {
 	stop    chan chan struct{}
-	records chan Record
+	records chan models.Record
 }
 
 func newVirtualQueue() Queue {
 	return &virtualQueue{
 		stop:    make(chan chan struct{}),
-		records: make(chan Record, 1),
+		records: make(chan models.Record, 1),
 	}
 }
 
-func (v *virtualQueue) Enqueue(rec Record) error {
+func (v *virtualQueue) Enqueue(rec models.Record) error {
 	v.records <- rec
 	return nil
 }
 
-func (v *virtualQueue) Dequeue() <-chan Record {
+func (v *virtualQueue) Dequeue() <-chan models.Record {
 	return v.records
 }
 

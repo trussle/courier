@@ -8,9 +8,9 @@ func newNopQueue() Queue {
 	return &nopQueue{}
 }
 
-func (nopQueue) Enqueue(Record) error { return nil }
-func (q nopQueue) Dequeue() <-chan Record {
-	ch := make(chan Record, 1)
+func (nopQueue) Enqueue(models.Record) error { return nil }
+func (q nopQueue) Dequeue() <-chan models.Record {
+	ch := make(chan models.Record, 1)
 	ch <- nil
 	return ch
 }
