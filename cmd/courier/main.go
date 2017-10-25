@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"text/tabwriter"
 
+	"github.com/SimonRichardson/flagset"
 	"github.com/pkg/errors"
 )
 
@@ -71,7 +72,7 @@ func usage() {
 	fmt.Fprintf(os.Stderr, "\n")
 }
 
-func usageFor(fs *flag.FlagSet, name string) func() {
+func usageFor(fs *flagset.FlagSet, name string) func() {
 	return func() {
 		fmt.Fprintf(os.Stderr, "USAGE\n")
 		fmt.Fprintf(os.Stderr, "  %s\n", name)
@@ -88,7 +89,7 @@ func usageFor(fs *flag.FlagSet, name string) func() {
 	}
 }
 
-func errorFor(fs *flag.FlagSet, name string, err error) error {
+func errorFor(fs *flagset.FlagSet, name string, err error) error {
 	defer usageFor(fs, name)()
 
 	if err != nil {

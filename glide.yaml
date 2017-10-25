@@ -20,6 +20,7 @@ import:
   - package: github.com/SimonRichardson/gexec
   - package: github.com/SimonRichardson/betwixt
   - package: github.com/SimonRichardson/resilience
+  - package: github.com/SimonRichardson/flagset
   - package: github.com/gorilla/mux
   - package: github.com/trussle/fsys
   - package: github.com/aws/aws-sdk-go

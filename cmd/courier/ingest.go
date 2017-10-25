@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
 
+	"github.com/SimonRichardson/flagset"
 	"github.com/SimonRichardson/gexec"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
@@ -19,7 +19,6 @@ import (
 	h "github.com/trussle/courier/pkg/http"
 	"github.com/trussle/courier/pkg/queue"
 	"github.com/trussle/courier/pkg/status"
-	"github.com/trussle/courier/pkg/stream"
 	"github.com/trussle/fsys"
 )
 
@@ -30,16 +29,12 @@ const (
 
 	defaultRootDir = "bin"
 
-	defaultAWSSQSID     = ""
-	defaultAWSSQSSecret = ""
-	defaultAWSSQSToken  = ""
-	defaultAWSSQSRegion = "eu-west-1"
-	defaultAWSSQSQueue  = ""
+	defaultAWSID     = ""
+	defaultAWSSecret = ""
+	defaultAWSToken  = ""
+	defaultAWSRegion = "eu-west-1"
 
-	defaultAWSFirehoseID     = ""
-	defaultAWSFirehoseSecret = ""
-	defaultAWSFirehoseToken  = ""
-	defaultAWSFirehoseRegion = "eu-west-1"
+	defaultAWSSQSQueue       = ""
 	defaultAWSFirehoseStream = ""
 
 	defaultRecipientURL        = ""
@@ -54,51 +49,38 @@ const (
 func runIngest(args []string) error {
 	// flags for the ingest command
 	var (
-		flagset = flag.NewFlagSet("ingest", flag.ExitOnError)
+		flags = flagset.NewFlagSet("ingest", flag.ExitOnError)
 
-		debug   = flagset.Bool("debug", false, "debug logging")
-		apiAddr = flagset.String("api", defaultAPIAddr, "listen address for ingest API")
+		debug   = flags.Bool("debug", false, "debug logging")
+		apiAddr = flags.String("api", defaultAPIAddr, "listen address for ingest API")
 
-		awsSQSID     = flagset.String("aws.sqs.id", defaultAWSSQSID, "AWS configuration id")
-		awsSQSSecret = flagset.String("aws.sqs.secret", defaultAWSSQSSecret, "AWS configuration secret")
-		awsSQSToken  = flagset.String("aws.sqs.token", defaultAWSSQSToken, "AWS configuration token")
-		awsSQSRegion = flagset.String("aws.sqs.region", defaultAWSSQSRegion, "AWS configuration region")
-		awsSQSQueue  = flagset.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
+		awsID     = flags.String("aws.id", defaultAWSID, "AWS configuration id")
+		awsSecret = flags.String("aws.secret", defaultAWSSecret, "AWS configuration secret")
+		awsToken  = flags.String("aws.token", defaultAWSToken, "AWS configuration token")
+		awsRegion = flags.String("aws.region", defaultAWSRegion, "AWS configuration region")
 
-		awsFirehoseID     = flagset.String("aws.firehose.id", defaultAWSFirehoseID, "AWS configuration id")
-		awsFirehoseSecret = flagset.String("aws.firehose.secret", defaultAWSFirehoseSecret, "AWS configuration secret")
-		awsFirehoseToken  = flagset.String("aws.firehose.token", defaultAWSFirehoseToken, "AWS configuration token")
-		awsFirehoseRegion = flagset.String("aws.firehose.region", defaultAWSFirehoseRegion, "AWS configuration region")
-		awsFirehoseStream = flagset.String("aws.firehose.queue", defaultAWSFirehoseStream, "AWS configuration stream")
+		awsSQSQueue       = flags.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
+		awsFirehoseStream = flags.String("aws.firehose.queue", defaultAWSFirehoseStream, "AWS configuration stream")
 
-		queueType      = flagset.String("queue", defaultQueue, "type of queue to use (remote, virtual, nop)")
-		streamType     = flagset.String("stream", defaultStream, "type of stream to use (local, virtual)")
-		filesystemType = flagset.String("filesystem", defaultFilesystem, "type of filesystem backing (local, virtual, nop)")
+		queueType      = flags.String("queue", defaultQueue, "type of queue to use (remote, virtual, nop)")
+		streamType     = flags.String("stream", defaultStream, "type of stream to use (local, virtual)")
+		filesystemType = flags.String("filesystem", defaultFilesystem, "type of filesystem backing (local, virtual, nop)")
 
-		recipientURL     = flagset.String("recipient.url", defaultRecipientURL, "URL to hit with the message payload")
-		segmentConsumers = flagset.Int("segment.consumers", defaultSegmentConsumers, "amount of segment consumers to run at once")
+		recipientURL     = flags.String("recipient.url", defaultRecipientURL, "URL to hit with the message payload")
+		segmentConsumers = flags.Int("segment.consumers", defaultSegmentConsumers, "amount of segment consumers to run at once")
 
-		rootDir = flagset.String("root.dir", defaultRootDir, "root directly for the filesystem to use")
+		rootDir = flags.String("root.dir", defaultRootDir, "root directly for the filesystem to use")
 
-		maxNumberOfMessages = flagset.Int("max.messages", defaultMaxNumberOfMessages, "max number of messages to dequeue at once")
-		visibilityTimeout   = flagset.String("visibility.timeout", defaultVisibilityTimeout, "how long the visibility of a message should extended by in seconds")
-		targetBatchSize     = flagset.Int("target.batch.size", defaultTargetBatchSize, "target batch size before forwarding")
-		targetBatchAge      = flagset.String("target.batch.age", defaultTargetBatchAge, "target batch age before forwarding")
+		maxNumberOfMessages = flags.Int("max.messages", defaultMaxNumberOfMessages, "max number of messages to dequeue at once")
+		visibilityTimeout   = flags.String("visibility.timeout", defaultVisibilityTimeout, "how long the visibility of a message should extended by in seconds")
+		targetBatchSize     = flags.Int("target.batch.size", defaultTargetBatchSize, "target batch size before forwarding")
+		targetBatchAge      = flags.String("target.batch.age", defaultTargetBatchAge, "target batch age before forwarding")
 
-		metricsRegistration = flagset.Bool("metrics.registration", defaultMetricsRegistration, "Registration of metrics on launch")
+		metricsRegistration = flags.Bool("metrics.registration", defaultMetricsRegistration, "Registration of metrics on launch")
 	)
 
-	var envArgs []string
-	flagset.VisitAll(func(flag *flag.Flag) {
-		key := envName(flag.Name)
-		if value, ok := syscall.Getenv(key); ok {
-			envArgs = append(envArgs, fmt.Sprintf("-%s=%s", flag.Name, value))
-		}
-	})
-
-	flagsetArgs := append(args, envArgs...)
-	flagset.Usage = usageFor(flagset, "ingest [flags]")
-	if err := flagset.Parse(flagsetArgs); err != nil {
+	flags.Usage = usageFor(flags, "ingest [flags]")
+	if err := flags.Parse(args); err != nil {
 		return nil
 	}
 

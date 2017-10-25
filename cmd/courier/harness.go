@@ -7,9 +7,9 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"syscall"
 	"time"
 
+	"github.com/SimonRichardson/flagset"
 	"github.com/SimonRichardson/gexec"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
@@ -23,29 +23,21 @@ import (
 func runHarness(args []string) error {
 	// flags for the harness command
 	var (
-		flagset = flag.NewFlagSet("ingest", flag.ExitOnError)
+		flags = flagset.NewFlagSet("ingest", flag.ExitOnError)
 
-		debug   = flagset.Bool("debug", false, "debug logging")
-		apiAddr = flagset.String("api", defaultAPIAddr, "listen address for harness API")
+		debug   = flags.Bool("debug", false, "debug logging")
+		apiAddr = flags.String("api", defaultAPIAddr, "listen address for harness API")
 
-		awsSQSID     = flagset.String("aws.sqs.id", defaultAWSSQSID, "AWS configuration id")
-		awsSQSSecret = flagset.String("aws.sqs.secret", defaultAWSSQSSecret, "AWS configuration secret")
-		awsSQSToken  = flagset.String("aws.sqs.token", defaultAWSSQSToken, "AWS configuration token")
-		awsSQSRegion = flagset.String("aws.sqs.region", defaultAWSSQSRegion, "AWS configuration region")
-		awsSQSQueue  = flagset.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
+		awsID     = flags.String("aws.id", defaultAWSID, "AWS configuration id")
+		awsSecret = flags.String("aws.secret", defaultAWSSecret, "AWS configuration secret")
+		awsToken  = flags.String("aws.token", defaultAWSToken, "AWS configuration token")
+		awsRegion = flags.String("aws.region", defaultAWSRegion, "AWS configuration region")
+
+		awsSQSQueue = flags.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
 	)
 
-	var envArgs []string
-	flagset.VisitAll(func(flag *flag.Flag) {
-		key := envName(flag.Name)
-		if value, ok := syscall.Getenv(key); ok {
-			envArgs = append(envArgs, fmt.Sprintf("-%s=%s", flag.Name, value))
-		}
-	})
-
-	flagsetArgs := append(args, envArgs...)
-	flagset.Usage = usageFor(flagset, "harness [flags]")
-	if err := flagset.Parse(flagsetArgs); err != nil {
+	flags.Usage = usageFor(flags, "harness [flags]")
+	if err := flags.Parse(args); err != nil {
 		return nil
 	}
 
