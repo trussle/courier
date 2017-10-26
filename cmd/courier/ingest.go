@@ -15,6 +15,7 @@ import (
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/trussle/courier/pkg/audit"
 	"github.com/trussle/courier/pkg/consumer"
 	h "github.com/trussle/courier/pkg/http"
 	"github.com/trussle/courier/pkg/queue"
@@ -23,11 +24,10 @@ import (
 )
 
 const (
-	defaultQueue      = "remote"
-	defaultStream     = "virtual"
-	defaultFilesystem = "nop"
-
-	defaultRootDir = "bin"
+	defaultQueue            = "remote"
+	defaultAuditLog         = "remote"
+	defaultAuditLogRootPath = "bin"
+	defaultFilesystem       = "nop"
 
 	defaultAWSID     = ""
 	defaultAWSSecret = ""
@@ -38,11 +38,9 @@ const (
 	defaultAWSFirehoseStream = ""
 
 	defaultRecipientURL        = ""
-	defaultSegmentConsumers    = 2
+	defaultNumConsumers        = 2
 	defaultMaxNumberOfMessages = 5
 	defaultVisibilityTimeout   = "1s"
-	defaultTargetBatchSize     = 10
-	defaultTargetBatchAge      = "30s"
 	defaultMetricsRegistration = true
 )
 
@@ -60,21 +58,18 @@ func runIngest(args []string) error {
 		awsRegion = flags.String("aws.region", defaultAWSRegion, "AWS configuration region")
 
 		awsSQSQueue       = flags.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
-		awsFirehoseStream = flags.String("aws.firehose.queue", defaultAWSFirehoseStream, "AWS configuration stream")
+		awsFirehoseStream = flags.String("aws.firehose.stream", defaultAWSFirehoseStream, "AWS configuration stream")
 
-		queueType      = flags.String("queue", defaultQueue, "type of queue to use (remote, virtual, nop)")
-		streamType     = flags.String("stream", defaultStream, "type of stream to use (local, virtual)")
-		filesystemType = flags.String("filesystem", defaultFilesystem, "type of filesystem backing (local, virtual, nop)")
+		queueType        = flags.String("queue", defaultQueue, "type of queue to use (remote, virtual, nop)")
+		auditLogType     = flags.String("auditlog", defaultAuditLog, "type of audit log to use (remote, local, nop)")
+		auditLogRootPath = flags.String("auditlog.path", defaultAuditLogRootPath, "audit log root directory for the filesystem to use")
+		filesystemType   = flags.String("filesystem", defaultFilesystem, "type of filesystem backing (local, virtual, nop)")
 
-		recipientURL     = flags.String("recipient.url", defaultRecipientURL, "URL to hit with the message payload")
-		segmentConsumers = flags.Int("segment.consumers", defaultSegmentConsumers, "amount of segment consumers to run at once")
-
-		rootDir = flags.String("root.dir", defaultRootDir, "root directly for the filesystem to use")
+		recipientURL = flags.String("recipient.url", defaultRecipientURL, "URL to hit with the message payload")
+		numConsumers = flags.Int("num.consumers", defaultNumConsumers, "number of consumers to run at once")
 
 		maxNumberOfMessages = flags.Int("max.messages", defaultMaxNumberOfMessages, "max number of messages to dequeue at once")
 		visibilityTimeout   = flags.String("visibility.timeout", defaultVisibilityTimeout, "how long the visibility of a message should extended by in seconds")
-		targetBatchSize     = flags.Int("target.batch.size", defaultTargetBatchSize, "target batch size before forwarding")
-		targetBatchAge      = flags.String("target.batch.age", defaultTargetBatchAge, "target batch age before forwarding")
 
 		metricsRegistration = flags.Bool("metrics.registration", defaultMetricsRegistration, "Registration of metrics on launch")
 	)
@@ -170,17 +165,15 @@ func runIngest(args []string) error {
 	}
 
 	// Firehose setup.
-	streamRemoteConfig, err := stream.BuildConfig(
-		stream.WithID(*awsFirehoseID),
-		stream.WithSecret(*awsFirehoseSecret),
-		stream.WithToken(*awsFirehoseToken),
-		stream.WithRegion(*awsFirehoseRegion),
-		stream.WithStream(*awsFirehoseStream),
-		stream.WithMaxNumberOfMessages(int(*maxNumberOfMessages)),
-		stream.WithVisibilityTimeout(visibilityTimeoutDuration),
+	auditRemoteConfig, err := audit.BuildRemoteConfig(
+		audit.WithID(*awsID),
+		audit.WithSecret(*awsSecret),
+		audit.WithToken(*awsToken),
+		audit.WithRegion(*awsRegion),
+		audit.WithStream(*awsFirehoseStream),
 	)
 	if err != nil {
-		return errors.Wrap(err, "queue remote config")
+		return errors.Wrap(err, "audit remote config")
 	}
 
 	// Create the HTTP clients we'll use for various purposes.
@@ -200,10 +193,10 @@ func runIngest(args []string) error {
 
 	// Configuration for the queue
 	queueRemoteConfig, err := queue.BuildConfig(
-		queue.WithID(*awsSQSID),
-		queue.WithSecret(*awsSQSSecret),
-		queue.WithToken(*awsSQSToken),
-		queue.WithRegion(*awsSQSRegion),
+		queue.WithID(*awsID),
+		queue.WithSecret(*awsSecret),
+		queue.WithToken(*awsToken),
+		queue.WithRegion(*awsRegion),
 		queue.WithQueue(*awsSQSQueue),
 		queue.WithMaxNumberOfMessages(int64(*maxNumberOfMessages)),
 		queue.WithVisibilityTimeout(visibilityTimeoutDuration),
@@ -220,37 +213,36 @@ func runIngest(args []string) error {
 		return errors.Wrap(err, "queue config")
 	}
 
-	// Configuration for the stream
-	age, err := time.ParseDuration(*targetBatchAge)
-	if err != nil {
-		return err
-	}
-
 	// Execution group.
 	var g gexec.Group
 	gexec.Block(g)
 	{
-		for i := 0; i < *segmentConsumers; i++ {
+		for i := 0; i < *numConsumers; i++ {
 
-			consumerRootDir := filepath.Join(*rootDir, fmt.Sprintf("segment-%04d", i))
-			streamConfig, err := stream.Build(
-				stream.With(*streamType),
-				stream.WithConfig(streamRemoteConfig),
-				stream.WithFilesystem(fs),
-				stream.WithRootDir(consumerRootDir),
-				stream.WithTargetSize(*targetBatchSize),
-				stream.WithTargetAge(age),
+			consumerRootDir := filepath.Join(*auditLogRootPath, fmt.Sprintf("audit-%04d", i))
+			auditLocalConfig, err := audit.BuildLocalConfig(
+				audit.WithRootPath(consumerRootDir),
+				audit.WithFsys(fs),
 			)
 			if err != nil {
-				return errors.Wrap(err, "stream config")
+				return errors.Wrap(err, "audit local config")
 			}
 
-			q, err := queue.New(queueConfig, log.With(logger, "component", "queue"))
+			auditConfig, err := audit.Build(
+				audit.With(*auditLogType),
+				audit.WithRemoteConfig(auditRemoteConfig),
+				audit.WithLocalConfig(auditLocalConfig),
+			)
+			if err != nil {
+				return errors.Wrap(err, "audit config")
+			}
+
+			consumerQueue, err := queue.New(queueConfig, log.With(logger, "component", "queue"))
 			if err != nil {
 				return err
 			}
 
-			s, err := stream.New(streamConfig, log.With(logger, "component", "stream"))
+			consumerLog, err := audit.New(auditConfig, log.With(logger, "component", "audit"))
 			if err != nil {
 				return err
 			}
@@ -258,8 +250,8 @@ func runIngest(args []string) error {
 			// Create the consumer
 			c := consumer.New(
 				h.NewClient(timeoutClient, *recipientURL),
-				q,
-				s,
+				consumerQueue,
+				consumerLog,
 				consumedSegments,
 				consumedRecords,
 				replicatedSegments,

@@ -2,7 +2,6 @@ package queue
 
 import (
 	"math/rand"
-	"reflect"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -136,7 +135,7 @@ func (v *remoteQueue) Run() {
 					continue
 				}
 
-				unique[aws.StringValue(msg.MessageId)] = newRemoteRecord(
+				unique[aws.StringValue(msg.MessageId)] = NewRecord(
 					id,
 					aws.StringValue(msg.MessageId),
 					models.Receipt(aws.StringValue(msg.ReceiptHandle)),
@@ -242,47 +241,6 @@ func (v *remoteQueue) changeMessageVisibility(records map[string]models.Record) 
 		level.Warn(v.logger).Log("state", "visibility change", "failed", num)
 	}
 	return nil
-}
-
-type remoteRecord struct {
-	id         uuid.UUID
-	messageID  string
-	receipt    models.Receipt
-	body       []byte
-	receivedAt time.Time
-}
-
-func newRemoteRecord(id uuid.UUID,
-	messageID string,
-	receipt models.Receipt,
-	body []byte,
-	receivedAt time.Time,
-) models.Record {
-	return &remoteRecord{
-		id:         id,
-		messageID:  messageID,
-		receipt:    receipt,
-		body:       body,
-		receivedAt: receivedAt,
-	}
-}
-
-func (r *remoteRecord) ID() uuid.UUID           { return r.id }
-func (r *remoteRecord) Receipt() models.Receipt { return r.receipt }
-func (r *remoteRecord) RecordID() string        { return r.messageID }
-func (r *remoteRecord) Body() []byte            { return r.body }
-
-func (r *remoteRecord) Equal(other models.Record) bool {
-	return r.ID().Equal(other.ID()) &&
-		reflect.DeepEqual(r.Body(), other.Body())
-}
-
-func (r *remoteRecord) Commit(txn models.Transaction) error {
-	return txn.Push(r.id, r)
-}
-
-func (r *remoteRecord) Failed(txn models.Transaction) error {
-	return txn.Push(r.id, r)
 }
 
 // ConfigOption defines a option for generating a RemoteConfig

@@ -17,7 +17,6 @@ import (
 	"github.com/trussle/courier/pkg/harness"
 	"github.com/trussle/courier/pkg/queue"
 	"github.com/trussle/courier/pkg/status"
-	"github.com/trussle/courier/pkg/uuid"
 )
 
 func runHarness(args []string) error {
@@ -65,10 +64,10 @@ func runHarness(args []string) error {
 
 	// Configuration for the queue
 	remoteConfig, err := queue.BuildConfig(
-		queue.WithID(*awsSQSID),
-		queue.WithSecret(*awsSQSSecret),
-		queue.WithToken(*awsSQSToken),
-		queue.WithRegion(*awsSQSRegion),
+		queue.WithID(*awsID),
+		queue.WithSecret(*awsSecret),
+		queue.WithToken(*awsToken),
+		queue.WithRegion(*awsRegion),
 		queue.WithQueue(*awsSQSQueue),
 	)
 	if err != nil {
@@ -102,10 +101,9 @@ func runHarness(args []string) error {
 				case <-step.C:
 					level.Info(logger).Log("state", "enqueuing")
 
-					payload := fmt.Sprintf("Ping-%s", time.Now().Format(time.RFC3339))
-					rec := queue.Record{
-						ID:   uuid.MustNew(rnd),
-						Body: []byte(payload),
+					rec, err := queue.GenerateQueueRecord(rnd)
+					if err != nil {
+						continue
 					}
 					if err := q.Enqueue(rec); err != nil {
 						level.Error(logger).Log("state", "enqueue failure", "err", err)

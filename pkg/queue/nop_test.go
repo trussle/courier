@@ -12,7 +12,7 @@ func TestNopQueue(t *testing.T) {
 	t.Parallel()
 
 	t.Run("enqueue", func(t *testing.T) {
-		fn := func(r TestRecord) bool {
+		fn := func(r queueRecord) bool {
 			queue := newNopQueue()
 			go queue.Run()
 			defer queue.Stop()
@@ -27,7 +27,7 @@ func TestNopQueue(t *testing.T) {
 	})
 
 	t.Run("dequeue", func(t *testing.T) {
-		fn := func(r TestRecord) bool {
+		fn := func(r queueRecord) bool {
 			queue := newNopQueue()
 			go queue.Run()
 			defer queue.Stop()

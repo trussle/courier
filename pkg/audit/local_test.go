@@ -6,9 +6,8 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/trussle/fsys"
-
 	"github.com/pkg/errors"
+	"github.com/trussle/fsys"
 )
 
 func TestBuildLocalConfig(t *testing.T) {
