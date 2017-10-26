@@ -7,12 +7,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-func TestConfigBuild(t *testing.T) {
+func TestBuildRemoteConfig(t *testing.T) {
 	t.Parallel()
 
 	t.Run("build", func(t *testing.T) {
 		fn := func(id, secret, token, region, stream string, numOfMessages int, timeout int64) bool {
-			config, err := BuildConfig(
+			config, err := BuildRemoteConfig(
 				WithEC2Role(false),
 				WithID(id),
 				WithSecret(secret),
@@ -36,7 +36,7 @@ func TestConfigBuild(t *testing.T) {
 	})
 
 	t.Run("invalid build", func(t *testing.T) {
-		_, err := BuildConfig(
+		_, err := BuildRemoteConfig(
 			func(config *RemoteConfig) error {
 				return errors.Errorf("bad")
 			},

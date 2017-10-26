@@ -84,8 +84,7 @@ func (r *remoteLog) Append(txn models.Transaction) error {
 	// Serialize all the record data
 	var data [][]byte
 	if err := txn.Walk(func(id uuid.UUID, record models.Record) error {
-		message := fmt.Sprintf("%s %s\n", record.RecordID(), string(record.Body()))
-		data = append(data, []byte(message))
+		data = append(data, row(id, record))
 		return nil
 	}); err != nil {
 		return err
@@ -123,12 +122,17 @@ func (r *remoteLog) onElementEviction(key uuid.UUID, value models.Record) {
 	// Do nothing here, we don't really care.
 }
 
-// ConfigOption defines a option for generating a RemoteConfig
-type ConfigOption func(*RemoteConfig) error
+func row(id uuid.UUID, record models.Record) []byte {
+	msg := fmt.Sprintf("%s %s\n", record.RecordID(), string(record.Body()))
+	return []byte(msg)
+}
 
-// BuildConfig ingests configuration options to then yield a
+// RemoteConfigOption defines a option for generating a RemoteConfig
+type RemoteConfigOption func(*RemoteConfig) error
+
+// BuildRemoteConfig ingests configuration options to then yield a
 // RemoteConfig, and return an error if it fails during configuring.
-func BuildConfig(opts ...ConfigOption) (*RemoteConfig, error) {
+func BuildRemoteConfig(opts ...RemoteConfigOption) (*RemoteConfig, error) {
 	var config RemoteConfig
 	for _, opt := range opts {
 		err := opt(&config)
@@ -140,7 +144,7 @@ func BuildConfig(opts ...ConfigOption) (*RemoteConfig, error) {
 }
 
 // WithEC2Role adds an EC2Role option to the configuration
-func WithEC2Role(ec2Role bool) ConfigOption {
+func WithEC2Role(ec2Role bool) RemoteConfigOption {
 	return func(config *RemoteConfig) error {
 		config.EC2Role = ec2Role
 		return nil
@@ -148,7 +152,7 @@ func WithEC2Role(ec2Role bool) ConfigOption {
 }
 
 // WithID adds an ID option to the configuration
-func WithID(id string) ConfigOption {
+func WithID(id string) RemoteConfigOption {
 	return func(config *RemoteConfig) error {
 		config.ID = id
 		return nil
@@ -156,7 +160,7 @@ func WithID(id string) ConfigOption {
 }
 
 // WithSecret adds an Secret option to the configuration
-func WithSecret(secret string) ConfigOption {
+func WithSecret(secret string) RemoteConfigOption {
 	return func(config *RemoteConfig) error {
 		config.Secret = secret
 		return nil
@@ -164,7 +168,7 @@ func WithSecret(secret string) ConfigOption {
 }
 
 // WithToken adds an Token option to the configuration
-func WithToken(token string) ConfigOption {
+func WithToken(token string) RemoteConfigOption {
 	return func(config *RemoteConfig) error {
 		config.Token = token
 		return nil
@@ -172,7 +176,7 @@ func WithToken(token string) ConfigOption {
 }
 
 // WithRegion adds an Region option to the configuration
-func WithRegion(region string) ConfigOption {
+func WithRegion(region string) RemoteConfigOption {
 	return func(config *RemoteConfig) error {
 		config.Region = region
 		return nil
@@ -180,7 +184,7 @@ func WithRegion(region string) ConfigOption {
 }
 
 // WithStream adds an Stream option to the configuration
-func WithStream(stream string) ConfigOption {
+func WithStream(stream string) RemoteConfigOption {
 	return func(config *RemoteConfig) error {
 		config.Stream = stream
 		return nil
