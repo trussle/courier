@@ -19,7 +19,7 @@ func TestLRU_Add(t *testing.T) {
 	t.Run("adding with eviction", func(t *testing.T) {
 		fn := func(id0, id1 uuid.UUID, rec0, rec1 TestRecord) bool {
 			evictted := 0
-			onEviction := func(k uuid.UUID, v models.Record) {
+			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 				if expected, actual := id0, k; !expected.Equal(actual) {
 					t.Errorf("expected: %v, actual: %v", expected, actual)
 				}
@@ -58,7 +58,7 @@ func TestLRU_Add(t *testing.T) {
 
 	t.Run("adding sorts keys", func(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2, rec3 TestRecord) bool {
-			onEviction := func(k uuid.UUID, v models.Record) {
+			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 				t.Fatal("failed if called")
 			}
 
@@ -92,7 +92,7 @@ func TestLRU_Get(t *testing.T) {
 
 	t.Run("get", func(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
-			onEviction := func(k uuid.UUID, v models.Record) {
+			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 				t.Fatal("failed if called")
 			}
 
@@ -120,7 +120,7 @@ func TestLRU_Get(t *testing.T) {
 
 	t.Run("get sorts keys", func(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
-			onEviction := func(k uuid.UUID, v models.Record) {
+			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 				t.Fatal("failed if called")
 			}
 
@@ -154,7 +154,7 @@ func TestLRU_Peek(t *testing.T) {
 
 	t.Run("peek", func(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
-			onEviction := func(k uuid.UUID, v models.Record) {
+			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 				t.Fatal("failed if called")
 			}
 
@@ -182,7 +182,7 @@ func TestLRU_Peek(t *testing.T) {
 
 	t.Run("peek does not sorts keys", func(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
-			onEviction := func(k uuid.UUID, v models.Record) {
+			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 				t.Fatal("failed if called")
 			}
 
@@ -216,7 +216,7 @@ func TestLRU_Contains(t *testing.T) {
 
 	t.Run("contains", func(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
-			onEviction := func(k uuid.UUID, v models.Record) {
+			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 				t.Fatal("failed if called")
 			}
 
@@ -241,7 +241,7 @@ func TestLRU_Contains(t *testing.T) {
 
 	t.Run("does not contains", func(t *testing.T) {
 		fn := func(id0, id1, id2, id3 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
-			onEviction := func(k uuid.UUID, v models.Record) {
+			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 				t.Fatal("failed if called")
 			}
 
@@ -271,7 +271,7 @@ func TestLRU_Remove(t *testing.T) {
 	t.Run("removes key value pair", func(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
 			evictted := 0
-			onEviction := func(k uuid.UUID, v models.Record) {
+			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 				if expected, actual := id0, k; !expected.Equal(actual) {
 					t.Errorf("expected: %v, actual: %v", expected, actual)
 				}
@@ -311,7 +311,7 @@ func TestLRU_Pop(t *testing.T) {
 	t.Parallel()
 
 	t.Run("pop on empty", func(t *testing.T) {
-		onEviction := func(k uuid.UUID, v models.Record) {
+		onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 			t.Fatal("failed if called")
 		}
 
@@ -327,7 +327,7 @@ func TestLRU_Pop(t *testing.T) {
 	t.Run("pop", func(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
 			evictted := 0
-			onEviction := func(k uuid.UUID, v models.Record) {
+			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 				if expected, actual := id0, k; !expected.Equal(actual) {
 					t.Errorf("expected: %v, actual: %v", expected, actual)
 				}
@@ -367,7 +367,7 @@ func TestLRU_Pop(t *testing.T) {
 	t.Run("pop results", func(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
 			evictted := 0
-			onEviction := func(k uuid.UUID, v models.Record) {
+			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 				if expected, actual := id0, k; !expected.Equal(actual) {
 					t.Errorf("expected: %v, actual: %v", expected, actual)
 				}
@@ -409,7 +409,7 @@ func TestLRU_Purge(t *testing.T) {
 	t.Run("purge", func(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
 			evictted := 0
-			onEviction := func(k uuid.UUID, v models.Record) {
+			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 				evictted += 1
 			}
 
@@ -450,7 +450,7 @@ func TestLRU_Keys(t *testing.T) {
 
 	t.Run("keys", func(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
-			onEviction := func(k uuid.UUID, v models.Record) {
+			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 				t.Fatal("failed if called")
 			}
 
@@ -479,7 +479,7 @@ func TestLRU_Keys(t *testing.T) {
 
 	t.Run("keys after get", func(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
-			onEviction := func(k uuid.UUID, v models.Record) {
+			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 				t.Fatal("failed if called")
 			}
 
@@ -515,7 +515,7 @@ func TestLRU_Dequeue(t *testing.T) {
 	t.Run("dequeue", func(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
 			evictted := 0
-			onEviction := func(k uuid.UUID, v models.Record) {
+			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 				evictted += 1
 			}
 
@@ -562,7 +562,7 @@ func TestLRU_Dequeue(t *testing.T) {
 	t.Run("dequeue with error", func(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
 			evictted := 0
-			onEviction := func(k uuid.UUID, v models.Record) {
+			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
 				evictted += 1
 			}
 

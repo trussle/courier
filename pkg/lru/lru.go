@@ -5,13 +5,30 @@ import (
 	"github.com/trussle/courier/pkg/uuid"
 )
 
+// EvictionReason describes why the eviction happened
+type EvictionReason int
+
+const (
+	// Purged by calling reset
+	Purged EvictionReason = iota
+
+	// Popped manually from the cache
+	Popped
+
+	// Removed manually from the cache
+	Removed
+
+	// Dequeued by walking over due to being dequeued
+	Dequeued
+)
+
 type KeyValue struct {
 	Key   uuid.UUID
 	Value models.Record
 }
 
 // EvictCallback lets you know when an eviction has happened in the cache
-type EvictCallback func(uuid.UUID, models.Record)
+type EvictCallback func(EvictionReason, uuid.UUID, models.Record)
 
 // LRU implements a non-thread safe fixed size LRU cache
 type LRU struct {
@@ -69,7 +86,7 @@ func (l *LRU) Get(key uuid.UUID) (value models.Record, ok bool) {
 func (l *LRU) Remove(key uuid.UUID) (ok bool) {
 	var elem *element
 	if elem, ok = l.items[key]; ok {
-		l.removeElement(elem)
+		l.removeElement(Removed, elem)
 	}
 	return
 }
@@ -93,7 +110,7 @@ func (l *LRU) Contains(key uuid.UUID) bool {
 // Pop removes the last LRU item with in the cache
 func (l *LRU) Pop() (uuid.UUID, models.Record, bool) {
 	if elem := l.list.Back(); elem != nil {
-		l.removeElement(elem)
+		l.removeElement(Popped, elem)
 		return elem.key, elem.value, true
 	}
 	return uuid.Empty, nil, false
@@ -103,7 +120,7 @@ func (l *LRU) Pop() (uuid.UUID, models.Record, bool) {
 func (l *LRU) Purge() {
 	l.list.Walk(func(key uuid.UUID, value models.Record) {
 		if l.onEvict != nil {
-			l.onEvict(key, value)
+			l.onEvict(Purged, key, value)
 		}
 		delete(l.items, key)
 	})
@@ -128,9 +145,14 @@ func (l *LRU) Len() int {
 	return l.list.Len()
 }
 
+// Cap returns the current cap limit to the LRU cache
+func (l *LRU) Cap() int {
+	return l.size
+}
+
 // Capacity returns if the LRU cache is at capacity or not.
 func (l *LRU) Capacity() bool {
-	return l.size == l.Len()
+	return l.Len() >= l.Cap()
 }
 
 // Slice returns a snapshot of the KeyValue pairs.
@@ -162,7 +184,7 @@ func (l *LRU) Dequeue(fn func(uuid.UUID, models.Record) error) ([]KeyValue, erro
 
 	res := make([]KeyValue, len(dequeued))
 	for k, e := range dequeued {
-		l.removeElement(e)
+		l.removeElement(Dequeued, e)
 		res[k] = KeyValue{
 			Key:   e.key,
 			Value: e.value,
@@ -171,10 +193,10 @@ func (l *LRU) Dequeue(fn func(uuid.UUID, models.Record) error) ([]KeyValue, erro
 	return res, err
 }
 
-func (l *LRU) removeElement(e *element) {
+func (l *LRU) removeElement(reason EvictionReason, e *element) {
 	ok := l.list.Remove(e)
 	delete(l.items, e.key)
 	if ok && l.onEvict != nil {
-		l.onEvict(e.key, e.value)
+		l.onEvict(reason, e.key, e.value)
 	}
 }

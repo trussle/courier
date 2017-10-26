@@ -19,6 +19,10 @@ import (
 	"github.com/trussle/courier/pkg/status"
 )
 
+const (
+	defaultBroadcast = true
+)
+
 func runHarness(args []string) error {
 	// flags for the harness command
 	var (
@@ -27,12 +31,13 @@ func runHarness(args []string) error {
 		debug   = flags.Bool("debug", false, "debug logging")
 		apiAddr = flags.String("api", defaultAPIAddr, "listen address for harness API")
 
-		awsID     = flags.String("aws.id", defaultAWSID, "AWS configuration id")
-		awsSecret = flags.String("aws.secret", defaultAWSSecret, "AWS configuration secret")
-		awsToken  = flags.String("aws.token", defaultAWSToken, "AWS configuration token")
-		awsRegion = flags.String("aws.region", defaultAWSRegion, "AWS configuration region")
-
+		awsID       = flags.String("aws.id", defaultAWSID, "AWS configuration id")
+		awsSecret   = flags.String("aws.secret", defaultAWSSecret, "AWS configuration secret")
+		awsToken    = flags.String("aws.token", defaultAWSToken, "AWS configuration token")
+		awsRegion   = flags.String("aws.region", defaultAWSRegion, "AWS configuration region")
 		awsSQSQueue = flags.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
+
+		broadcast = flags.Bool("broadcast", defaultBroadcast, "broadcast new records")
 	)
 
 	flags.Usage = usageFor(flags, "harness [flags]")
@@ -101,6 +106,10 @@ func runHarness(args []string) error {
 			for {
 				select {
 				case <-step.C:
+					if !*broadcast {
+						continue
+					}
+
 					level.Info(logger).Log("state", "enqueuing")
 
 					rec, err := queue.GenerateQueueRecord(rnd)

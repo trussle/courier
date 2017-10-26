@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	defaultRunFrequency = time.Millisecond * 50
+	defaultRunFrequency = time.Millisecond * 1
 )
 
 // RemoteConfig creates a configuration to create a RemoteQueue.
@@ -88,7 +88,7 @@ func newRemoteQueue(config *RemoteConfig, logger log.Logger) (Queue, error) {
 		visibilityTimeout:   aws.Int64(int64(config.VisibilityTimeout)),
 		freq:                defaultRunFrequency,
 		stop:                make(chan chan struct{}),
-		records:             make(chan models.Record, 1),
+		records:             make(chan models.Record),
 		randSource:          rand.New(rand.NewSource(time.Now().UnixNano())),
 		logger:              logger,
 	}, nil

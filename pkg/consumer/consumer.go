@@ -16,10 +16,6 @@ import (
 	"github.com/trussle/courier/pkg/uuid"
 )
 
-const (
-	defaultWaitTime = time.Second
-)
-
 // Consumer reads segments from the queue, and replicates merged segments to
 // the rest of the cluster. It's implemented as a state machine: gather
 // segments, replicate, commit, and repeat. All failures invalidate the entire
@@ -49,6 +45,7 @@ func New(
 	log audit.Log,
 	consumedSegments, consumedRecords metrics.Counter,
 	replicatedSegments, replicatedRecords metrics.Counter,
+	failedSegments, failedRecords metrics.Counter,
 	logger log.Logger,
 ) *Consumer {
 	consumer := &Consumer{
@@ -62,11 +59,12 @@ func New(
 		consumedRecords:    consumedRecords,
 		replicatedSegments: replicatedSegments,
 		replicatedRecords:  replicatedRecords,
-		gatherWaitTime:     defaultWaitTime,
+		failedSegments:     failedSegments,
+		failedRecords:      failedRecords,
 		logger:             logger,
 	}
 
-	consumer.lru = lru.NewLRU(100, consumer.onElementEviction)
+	consumer.lru = lru.NewLRU(10, consumer.onElementEviction)
 
 	return consumer
 }
@@ -74,7 +72,7 @@ func New(
 // Run consumes segments from the queue, and replicates them to the endpoint.
 // Run returns when Stop is invoked.
 func (c *Consumer) Run() {
-	step := time.NewTicker(100 * time.Millisecond)
+	step := time.NewTicker(10 * time.Millisecond)
 	defer step.Stop()
 
 	state := c.gather
@@ -103,13 +101,6 @@ func (c *Consumer) Stop() {
 type stateFn func() stateFn
 
 func (c *Consumer) gather() stateFn {
-	var (
-		base = log.With(c.logger, "state", "gather")
-		warn = level.Warn(base)
-	)
-
-	warn.Log("state", "gather")
-
 	// A naïve way to break out of the gather loop in atypical conditions.
 	if c.gatherErrors > 0 {
 		if c.lru.Len() == 0 {
@@ -129,7 +120,11 @@ func (c *Consumer) gather() stateFn {
 	}
 
 	// Dequeue
-	record := <-c.queue.Dequeue()
+	var record models.Record
+	select {
+	case record = <-c.queue.Dequeue():
+		break
+	}
 
 	c.lru.Add(record.ID(), record)
 
@@ -141,23 +136,30 @@ func (c *Consumer) gather() stateFn {
 
 func (c *Consumer) replicate() stateFn {
 	var (
-		base = log.With(c.logger, "state", "replicate")
-		warn = level.Warn(base)
+		base  = log.With(c.logger, "state", "replicate")
+		warn  = level.Warn(base)
+		debug = level.Debug(base)
 	)
 
+	if c.lru.Len() == 0 {
+		warn.Log("action", "len", "reason", "len is zero")
+		return c.gather
+	}
+
 	dequeued, err := c.lru.Dequeue(func(key uuid.UUID, value models.Record) error {
+		debug.Log("action", "sending", "key", key.String())
 		return c.client.Send(value.Body())
 	})
 
 	// even if we err out, we should send them in a transaction
 	go func() {
 		if err := c.commit(dequeued); err != nil {
-			warn.Log("state", "replicate", "err", err)
+			warn.Log("action", "commit", "err", err)
 		}
 	}()
 
 	if err != nil {
-		warn.Log("state", "replicate", "err", err)
+		warn.Log("action", "dequeue", "err", err)
 		return c.failure
 	}
 
@@ -173,7 +175,7 @@ func (c *Consumer) failure() stateFn {
 		warn = level.Warn(base)
 	)
 
-	var txn models.Transaction
+	txn := NewTransaction()
 	for _, v := range c.lru.Slice() {
 		if err := txn.Push(v.Value.ID(), v.Value); err != nil {
 			continue
@@ -192,13 +194,18 @@ PURGE:
 	return c.gather
 }
 
-func (c *Consumer) onElementEviction(key uuid.UUID, value models.Record) {
+func (c *Consumer) onElementEviction(reason lru.EvictionReason, key uuid.UUID, value models.Record) {
 	// We should fail the transaction
-	level.Warn(c.logger).Log("state", "eviction", "id", key.String(), "record", value.RecordID())
+	switch reason {
+	case lru.Dequeued:
+		// do nothing
+	default:
+		level.Warn(c.logger).Log("state", "eviction", "id", key.String(), "record", value.RecordID())
+	}
 }
 
 func (c *Consumer) commit(queue []lru.KeyValue) error {
-	var txn models.Transaction
+	txn := NewTransaction()
 	for _, v := range queue {
 		if err := txn.Push(v.Value.ID(), v.Value); err != nil {
 			continue

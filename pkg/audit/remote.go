@@ -118,7 +118,7 @@ func (r *remoteLog) Append(txn models.Transaction) error {
 	return nil
 }
 
-func (r *remoteLog) onElementEviction(key uuid.UUID, value models.Record) {
+func (r *remoteLog) onElementEviction(reason lru.EvictionReason, key uuid.UUID, value models.Record) {
 	// Do nothing here, we don't really care.
 }
 

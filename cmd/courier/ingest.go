@@ -123,6 +123,16 @@ func runIngest(args []string) error {
 		Name:      "store_replicated_records",
 		Help:      "Records replicated from ingest.",
 	})
+	failedSegments := prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: "courier_transformer_store",
+		Name:      "store_failed_segments",
+		Help:      "Segments failed from ingest.",
+	})
+	failedRecords := prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: "courier_transformer_store",
+		Name:      "store_failed_records",
+		Help:      "Records failed from ingest.",
+	})
 
 	if *metricsRegistration {
 		prometheus.MustRegister(
@@ -132,6 +142,8 @@ func runIngest(args []string) error {
 			consumedRecords,
 			replicatedSegments,
 			replicatedRecords,
+			failedSegments,
+			failedRecords,
 		)
 	}
 
@@ -256,8 +268,16 @@ func runIngest(args []string) error {
 				consumedRecords,
 				replicatedSegments,
 				replicatedRecords,
-				log.With(logger, "component", "consumer"),
+				failedSegments,
+				failedRecords,
+				log.With(logger, "component", fmt.Sprintf("consumer-%d", i)),
 			)
+			g.Add(func() error {
+				consumerQueue.Run()
+				return nil
+			}, func(error) {
+				consumerQueue.Stop()
+			})
 			g.Add(func() error {
 				c.Run()
 				return nil
