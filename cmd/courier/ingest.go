@@ -63,7 +63,7 @@ func runIngest(args []string) error {
 		awsRegion  = flags.String("aws.region", defaultAWSRegion, "AWS configuration region")
 
 		awsSQSQueue       = flags.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
-		awsFirehoseStream = flags.String("aws.firehose.queue", defaultAWSFirehoseStream, "AWS configuration stream")
+		awsFirehoseStream = flags.String("aws.firehose.stream", defaultAWSFirehoseStream, "AWS configuration stream")
 
 		queueType      = flags.String("queue", defaultQueue, "type of queue to use (remote, virtual, nop)")
 		streamType     = flags.String("stream", defaultStream, "type of stream to use (local, virtual)")
