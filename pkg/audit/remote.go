@@ -3,6 +3,8 @@ package audit
 import (
 	"fmt"
 
+	"github.com/go-kit/kit/log/level"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
@@ -11,8 +13,13 @@ import (
 	"github.com/aws/aws-sdk-go/service/firehose"
 	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
+	"github.com/trussle/courier/pkg/lru"
 	"github.com/trussle/courier/pkg/models"
 	"github.com/trussle/courier/pkg/uuid"
+)
+
+const (
+	defaultSelectCacheAmount = 1000
 )
 
 // RemoteConfig creates a configuration to create a RemoteLog.
@@ -26,6 +33,7 @@ type RemoteConfig struct {
 type remoteLog struct {
 	client    *firehose.Firehose
 	streamURL *string
+	lru       *lru.LRU
 	logger    log.Logger
 }
 
@@ -61,11 +69,15 @@ func newRemoteLog(config *RemoteConfig, logger log.Logger) (Log, error) {
 		client = firehose.New(session.New(cfg))
 	)
 
-	return &remoteLog{
+	log := &remoteLog{
 		client:    client,
 		streamURL: aws.String(config.Stream),
 		logger:    logger,
-	}, nil
+	}
+
+	log.lru = lru.NewLRU(defaultSelectCacheAmount, log.onElementEviction)
+
+	return log, nil
 }
 
 func (r *remoteLog) Append(txn models.Transaction) error {
@@ -91,8 +103,24 @@ func (r *remoteLog) Append(txn models.Transaction) error {
 		Records:            records,
 	}
 
-	_, err := r.client.PutRecordBatch(input)
-	return err
+	if _, err := r.client.PutRecordBatch(input); err != nil {
+		return err
+	}
+
+	// Store the transactions in the LRU
+	if err := txn.Walk(func(id uuid.UUID, record models.Record) error {
+		r.lru.Add(id, record)
+		return nil
+	}); err != nil {
+		// We don't care about this error.
+		level.Warn(r.logger).Log("state", "append", "err", err)
+	}
+
+	return nil
+}
+
+func (r *remoteLog) onElementEviction(key uuid.UUID, value models.Record) {
+	// Do nothing here, we don't really care.
 }
 
 // ConfigOption defines a option for generating a RemoteConfig
