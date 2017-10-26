@@ -99,6 +99,8 @@ func runIngest(args []string) error {
 		logger = level.NewFilter(logger, logLevel)
 	}
 
+	level.Debug(logger).Log("ec2_role", *awsEC2Role, "aws_region", *awsRegion, "aws_sqs_queue", *awsSQSQueue, "aws_firehose_stream", *awsFirehoseStream)
+
 	// Instrumentation
 	connectedClients := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "courier_transformer_store",
