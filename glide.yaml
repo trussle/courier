@@ -4,7 +4,6 @@ import:
   - package: github.com/go-kit/kit
   - package: github.com/go-logfmt/logfmt
   - package: github.com/go-stack/stack
-  - package: github.com/SimonRichardson/gexec
   - package: github.com/armon/go-metrics
   - package: github.com/prometheus/prometheus
   - package: github.com/prometheus/client_golang
@@ -19,6 +18,8 @@ import:
   - package: github.com/pborman/uuid
   - package: github.com/golang/mock/gomock
   - package: github.com/SimonRichardson/betwixt
+  - package: github.com/SimonRichardson/gexec
+  - package: github.com/SimonRichardson/flagset
   - package: github.com/gorilla/mux
   - package: github.com/trussle/fsys
   - package: github.com/aws/aws-sdk-go
