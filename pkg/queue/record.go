@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"fmt"
 	"math/rand"
 	"reflect"
 	"time"
@@ -77,7 +78,7 @@ func GenerateQueueRecord(rnd *rand.Rand) (models.Record, error) {
 		if _, err = rnd.Read(dst); err != nil {
 			return nil, err
 		}
-		rec.messageID = string(dst)
+		rec.messageID = fmt.Sprintf("%X", dst)
 	}
 
 	// Receipt generation
@@ -86,7 +87,7 @@ func GenerateQueueRecord(rnd *rand.Rand) (models.Record, error) {
 		if _, err = rnd.Read(dst); err != nil {
 			return nil, err
 		}
-		rec.receipt = models.Receipt(string(dst))
+		rec.receipt = models.Receipt(fmt.Sprintf("%X", dst))
 	}
 
 	// Body generation
@@ -95,7 +96,7 @@ func GenerateQueueRecord(rnd *rand.Rand) (models.Record, error) {
 		if _, err = rnd.Read(dst); err != nil {
 			return nil, err
 		}
-		rec.body = dst
+		rec.body = []byte(fmt.Sprintf("%X", dst))
 	}
 
 	// Timestamp generation

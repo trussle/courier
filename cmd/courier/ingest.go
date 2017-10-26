@@ -25,7 +25,7 @@ import (
 
 const (
 	defaultQueue            = "remote"
-	defaultAuditLog         = "remote"
+	defaultAuditLog         = "nop"
 	defaultAuditLogRootPath = "bin"
 	defaultFilesystem       = "nop"
 
@@ -214,7 +214,7 @@ func runIngest(args []string) error {
 	}
 
 	// Execution group.
-	var g gexec.Group
+	g := gexec.NewGroup()
 	gexec.Block(g)
 	{
 		for i := 0; i < *numConsumers; i++ {

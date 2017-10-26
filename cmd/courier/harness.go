@@ -82,7 +82,7 @@ func runHarness(args []string) error {
 		return errors.Wrap(err, "queue config")
 	}
 
-	var g gexec.Group
+	g := gexec.NewGroup()
 	gexec.Block(g)
 	{
 		q, err := queue.New(queueConfig, log.With(logger, "component", "queue"))
@@ -90,8 +90,10 @@ func runHarness(args []string) error {
 			return err
 		}
 
-		step := time.NewTicker(10 * time.Millisecond)
-		stop := make(chan chan struct{})
+		var (
+			step = time.NewTicker(500 * time.Millisecond)
+			stop = make(chan chan struct{})
+		)
 
 		rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
