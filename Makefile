@@ -78,7 +78,7 @@ unit-tests:
 
 .PHONY: integration-tests
 integration-tests:
-	docker-compose run courier go test -v -tags=integration ./pkg/queue/...
+	docker-compose run courier go test -v -tags=integration ./cmd/... ./pkg/...
 
 .PHONY: documentation
 documentation:

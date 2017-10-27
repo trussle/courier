@@ -1,14 +1,81 @@
 package audit
 
 import (
+	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/quick"
+	"time"
 
+	"github.com/trussle/courier/pkg/queue"
+	"github.com/trussle/courier/pkg/uuid"
+
+	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
 	"github.com/trussle/fsys"
 )
+
+func TestLocal(t *testing.T) {
+	t.Parallel()
+
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	t.Run("append", func(t *testing.T) {
+		virtual := fsys.NewVirtualFilesystem()
+		config, err := BuildLocalConfig(
+			WithRootPath(""),
+			WithFsys(virtual),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		localLog, err := newLocalLog(config, log.NewNopLogger())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		id, err := uuid.New(rnd)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		record, err := queue.GenerateQueueRecord(rnd)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		txn := queue.NewTransaction()
+		txn.Push(id, record)
+
+		if err := localLog.Append(txn); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := virtual.Walk("", func(path string, info os.FileInfo, err error) error {
+			file, err := virtual.Open(path)
+			if err != nil {
+				return err
+			}
+
+			bytes, err := ioutil.ReadAll(file)
+			if err != nil {
+				return err
+			}
+
+			if expected, actual := record.RecordID(), strings.Split(string(bytes), " ")[0]; expected != actual {
+				t.Errorf("expected: %s, actual: %s", expected, actual)
+			}
+
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
 
 func TestBuildLocalConfig(t *testing.T) {
 	t.Parallel()
