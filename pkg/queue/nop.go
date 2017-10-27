@@ -8,12 +8,8 @@ func newNopQueue() Queue {
 	return &nopQueue{}
 }
 
-func (nopQueue) Enqueue(models.Record) error { return nil }
-func (q nopQueue) Dequeue() <-chan models.Record {
-	ch := make(chan models.Record, 1)
-	ch <- nil
-	return ch
-}
+func (nopQueue) Enqueue(models.Record) error       { return nil }
+func (nopQueue) Dequeue() ([]models.Record, error) { return make([]models.Record, 0), nil }
 
 func (nopQueue) Run()  {}
 func (nopQueue) Stop() {}

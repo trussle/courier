@@ -212,7 +212,6 @@ func runIngest(args []string) error {
 		queue.WithQueue(*awsSQSQueue),
 		queue.WithMaxNumberOfMessages(int64(*maxNumberOfMessages)),
 		queue.WithVisibilityTimeout(visibilityTimeoutDuration),
-		queue.WithRunFrequency(time.Millisecond*10),
 	)
 	if err != nil {
 		return errors.Wrap(err, "queue remote config")
@@ -273,12 +272,6 @@ func runIngest(args []string) error {
 				failedRecords,
 				log.With(logger, "component", fmt.Sprintf("consumer-%d", i)),
 			)
-			g.Add(func() error {
-				consumerQueue.Run()
-				return nil
-			}, func(error) {
-				consumerQueue.Stop()
-			})
 			g.Add(func() error {
 				c.Run()
 				return nil

@@ -12,18 +12,11 @@ import (
 // The queue's underlying backing store is a constructed from a channel, so it
 // blocks if no body dequeues any items.
 type Queue interface {
-
-	// Run the queue
-	Run()
-
-	// Stop the queue
-	Stop()
-
 	// Enqueue a record
 	Enqueue(models.Record) error
 
 	// Dequeue a record from the channel
-	Dequeue() <-chan models.Record
+	Dequeue() ([]models.Record, error)
 
 	// Commit a transaction containing the records, so that an ack can be sent
 	Commit(models.Transaction) (Result, error)

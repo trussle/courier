@@ -119,9 +119,7 @@ func (l *LRU) Pop() (uuid.UUID, models.Record, bool) {
 // Purge removes all items with in the cache, calling evict callback on each.
 func (l *LRU) Purge() {
 	l.list.Walk(func(key uuid.UUID, value models.Record) {
-		if l.onEvict != nil {
-			l.onEvict(Purged, key, value)
-		}
+		l.onEvict(Purged, key, value)
 		delete(l.items, key)
 	})
 	l.list.Reset()
@@ -196,7 +194,7 @@ func (l *LRU) Dequeue(fn func(uuid.UUID, models.Record) error) ([]KeyValue, erro
 func (l *LRU) removeElement(reason EvictionReason, e *element) {
 	ok := l.list.Remove(e)
 	delete(l.items, e.key)
-	if ok && l.onEvict != nil {
+	if ok {
 		l.onEvict(reason, e.key, e.value)
 	}
 }

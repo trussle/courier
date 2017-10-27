@@ -24,7 +24,6 @@ type RemoteConfig struct {
 	Region, Queue       string
 	MaxNumberOfMessages int64
 	VisibilityTimeout   time.Duration
-	RunFrequency        time.Duration
 }
 
 type remoteQueue struct {
@@ -33,7 +32,6 @@ type remoteQueue struct {
 	maxNumberOfMessages *int64
 	waitTime            *int64
 	visibilityTimeout   *int64
-	freq                time.Duration
 	stop                chan chan struct{}
 	records             chan models.Record
 	randSource          *rand.Rand
@@ -83,7 +81,6 @@ func newRemoteQueue(config *RemoteConfig, logger log.Logger) (Queue, error) {
 		queueURL:            queueURL.QueueUrl,
 		maxNumberOfMessages: aws.Int64(config.MaxNumberOfMessages),
 		visibilityTimeout:   aws.Int64(int64(config.VisibilityTimeout)),
-		freq:                config.RunFrequency,
 		stop:                make(chan chan struct{}),
 		records:             make(chan models.Record),
 		randSource:          rand.New(rand.NewSource(time.Now().UnixNano())),
@@ -100,31 +97,7 @@ func (v *remoteQueue) Enqueue(rec models.Record) error {
 	return err
 }
 
-func (v *remoteQueue) Dequeue() <-chan models.Record {
-	return v.records
-}
-
-func (v *remoteQueue) Run() {
-	step := time.NewTicker(v.freq)
-	defer step.Stop()
-
-	// Cause an immediate run, then fall back to the frequency based timer.
-	v.run()
-
-	// Frequency based timer.
-	for {
-		select {
-		case q := <-v.stop:
-			close(q)
-			return
-
-		case <-step.C:
-			v.run()
-		}
-	}
-}
-
-func (v *remoteQueue) run() {
+func (v *remoteQueue) Dequeue() ([]models.Record, error) {
 	input := &sqs.ReceiveMessageInput{
 		QueueUrl:            v.queueURL,
 		MaxNumberOfMessages: v.maxNumberOfMessages,
@@ -136,17 +109,17 @@ func (v *remoteQueue) run() {
 
 	resp, err := v.client.ReceiveMessage(input)
 	if err != nil {
-		return
+		return make([]models.Record, 0), err
 	}
 
-	unique := make(map[string]models.Record, len(resp.Messages))
-	for _, msg := range resp.Messages {
+	unique := make([]models.Record, len(resp.Messages))
+	for k, msg := range resp.Messages {
 		id, e := uuid.New(v.randSource)
 		if e != nil {
 			continue
 		}
 
-		unique[aws.StringValue(msg.MessageId)] = NewRecord(
+		unique[k] = NewRecord(
 			id,
 			aws.StringValue(msg.MessageId),
 			models.Receipt(aws.StringValue(msg.ReceiptHandle)),
@@ -160,15 +133,12 @@ func (v *remoteQueue) run() {
 		level.Warn(v.logger).Log("action", "run", "err", err)
 	}
 
-	for _, r := range unique {
-		v.records <- r
-	}
+	return unique, nil
 }
 
-func (v *remoteQueue) Stop() {
-	q := make(chan struct{})
-	v.stop <- q
-	<-q
+type keyValue struct {
+	Key   uuid.UUID
+	Value models.Receipt
 }
 
 func (v *remoteQueue) Commit(txn models.Transaction) (Result, error) {
@@ -180,39 +150,57 @@ func (v *remoteQueue) Commit(txn models.Transaction) (Result, error) {
 		return Result{}, err
 	}
 
+	// chunk into 10 at a time because of the limitations of AWS
 	var (
-		index    int
-		entities = make([]*sqs.DeleteMessageBatchRequestEntry, len(records))
+		i, index int
+		parts    = make([][]keyValue, int((float64(len(records))/9)+0.9))
 	)
-	for k, v := range records {
-		entities[index] = &sqs.DeleteMessageBatchRequestEntry{
-			Id:            aws.String(k.String()),
-			ReceiptHandle: aws.String(v.String()),
+	for id, receipt := range records {
+		parts[index] = append(parts[index], keyValue{
+			Key:   id,
+			Value: receipt,
+		})
+		index = (i / 9)
+		i++
+	}
+
+	var result Result
+	for _, part := range parts {
+
+		entities := make([]*sqs.DeleteMessageBatchRequestEntry, len(records))
+		for i, kv := range part {
+			entities[i] = &sqs.DeleteMessageBatchRequestEntry{
+				Id:            aws.String(kv.Key.String()),
+				ReceiptHandle: aws.String(kv.Value.String()),
+			}
 		}
-		index++
+
+		input := &sqs.DeleteMessageBatchInput{
+			Entries:  entities,
+			QueueUrl: v.queueURL,
+		}
+
+		output, err := v.client.DeleteMessageBatch(input)
+		if err != nil {
+			return Result{}, err
+		}
+
+		result.Success += len(output.Successful)
+		result.Failure += len(output.Failed)
 	}
 
-	input := &sqs.DeleteMessageBatchInput{
-		Entries:  entities,
-		QueueUrl: v.queueURL,
-	}
-	output, err := v.client.DeleteMessageBatch(input)
-	if err != nil {
-		return Result{}, err
-	}
-
-	return Result{
-		Success: len(output.Successful),
-		Failure: len(output.Failed),
-	}, nil
+	return result, nil
 }
 
 func (v *remoteQueue) Failed(txn models.Transaction) (Result, error) {
 	// TODO: Send to a failure queue.
-	return Result{}, nil
+	return Result{
+		Success: txn.Len(),
+		Failure: 0,
+	}, nil
 }
 
-func (v *remoteQueue) changeMessageVisibility(records map[string]models.Record) error {
+func (v *remoteQueue) changeMessageVisibility(records []models.Record) error {
 	// fast exit
 	if len(records) == 0 {
 		return nil
@@ -226,17 +214,13 @@ func (v *remoteQueue) changeMessageVisibility(records map[string]models.Record) 
 		return nil
 	}
 
-	var (
-		index   int
-		entries = make([]*sqs.ChangeMessageVisibilityBatchRequestEntry, len(records))
-	)
-	for _, v := range records {
-		entries[index] = &sqs.ChangeMessageVisibilityBatchRequestEntry{
+	entries := make([]*sqs.ChangeMessageVisibilityBatchRequestEntry, len(records))
+	for k, v := range records {
+		entries[k] = &sqs.ChangeMessageVisibilityBatchRequestEntry{
 			Id:                aws.String(v.ID().String()),
 			ReceiptHandle:     aws.String(v.Receipt().String()),
 			VisibilityTimeout: aws.Int64(int64(seconds)),
 		}
-		index++
 	}
 
 	input := &sqs.ChangeMessageVisibilityBatchInput{
@@ -260,9 +244,7 @@ type ConfigOption func(*RemoteConfig) error
 // BuildConfig ingests configuration options to then yield a
 // RemoteConfig, and return an error if it fails during configuring.
 func BuildConfig(opts ...ConfigOption) (*RemoteConfig, error) {
-	config := RemoteConfig{
-		RunFrequency: time.Millisecond * 10,
-	}
+	var config RemoteConfig
 	for _, opt := range opts {
 		err := opt(&config)
 		if err != nil {
@@ -334,15 +316,6 @@ func WithMaxNumberOfMessages(numOfMessages int64) ConfigOption {
 func WithVisibilityTimeout(visibilityTimeout time.Duration) ConfigOption {
 	return func(config *RemoteConfig) error {
 		config.VisibilityTimeout = visibilityTimeout
-		return nil
-	}
-}
-
-// WithRunFrequency adds an RunFrequency option to the
-// configuration
-func WithRunFrequency(runFrequency time.Duration) ConfigOption {
-	return func(config *RemoteConfig) error {
-		config.RunFrequency = runFrequency
 		return nil
 	}
 }

@@ -14,9 +14,6 @@ func TestNopQueue(t *testing.T) {
 	t.Run("enqueue", func(t *testing.T) {
 		fn := func(r queueRecord) bool {
 			queue := newNopQueue()
-			go queue.Run()
-			defer queue.Stop()
-
 			err := queue.Enqueue(r)
 			return err == nil
 		}
@@ -29,15 +26,16 @@ func TestNopQueue(t *testing.T) {
 	t.Run("dequeue", func(t *testing.T) {
 		fn := func(r queueRecord) bool {
 			queue := newNopQueue()
-			go queue.Run()
-			defer queue.Stop()
 
 			if err := queue.Enqueue(r); err != nil {
 				t.Fatal(err)
 			}
 
-			rec := <-queue.Dequeue()
-			return rec == nil
+			res, err := queue.Dequeue()
+			if err != nil {
+				t.Error(err)
+			}
+			return len(res) == 0
 		}
 
 		if err := quick.Check(fn, nil); err != nil {
@@ -50,9 +48,6 @@ func TestNopQueue(t *testing.T) {
 		defer ctrl.Finish()
 
 		queue := newNopQueue()
-		go queue.Run()
-		defer queue.Stop()
-
 		txn := mocks.NewMockTransaction(ctrl)
 
 		txn.EXPECT().Len().Return(0)
@@ -75,8 +70,6 @@ func TestNopQueue(t *testing.T) {
 		defer ctrl.Finish()
 
 		queue := newNopQueue()
-		go queue.Run()
-		defer queue.Stop()
 
 		txn := mocks.NewMockTransaction(ctrl)
 

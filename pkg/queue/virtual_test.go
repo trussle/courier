@@ -14,8 +14,6 @@ func TestVirtualQueue(t *testing.T) {
 	t.Run("enqueue", func(t *testing.T) {
 		fn := func(r queueRecord) bool {
 			queue := newVirtualQueue()
-			go queue.Run()
-			defer queue.Stop()
 
 			err := queue.Enqueue(r)
 			return err == nil
@@ -29,15 +27,16 @@ func TestVirtualQueue(t *testing.T) {
 	t.Run("dequeue", func(t *testing.T) {
 		fn := func(r queueRecord) bool {
 			queue := newVirtualQueue()
-			go queue.Run()
-			defer queue.Stop()
 
 			if err := queue.Enqueue(r); err != nil {
 				t.Fatal(err)
 			}
 
-			rec := <-queue.Dequeue()
-			return rec.Equal(r)
+			res, err := queue.Dequeue()
+			if err != nil {
+				t.Error(err)
+			}
+			return len(res) == 1
 		}
 
 		if err := quick.Check(fn, nil); err != nil {
@@ -50,8 +49,6 @@ func TestVirtualQueue(t *testing.T) {
 		defer ctrl.Finish()
 
 		queue := newVirtualQueue()
-		go queue.Run()
-		defer queue.Stop()
 
 		txn := mocks.NewMockTransaction(ctrl)
 
@@ -75,8 +72,6 @@ func TestVirtualQueue(t *testing.T) {
 		defer ctrl.Finish()
 
 		queue := newVirtualQueue()
-		go queue.Run()
-		defer queue.Stop()
 
 		txn := mocks.NewMockTransaction(ctrl)
 

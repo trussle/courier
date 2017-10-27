@@ -14,6 +14,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/trussle/courier/pkg/harness"
 	"github.com/trussle/courier/pkg/queue"
 	"github.com/trussle/courier/pkg/status"
@@ -38,6 +39,8 @@ func runHarness(args []string) error {
 		awsSQSQueue = flags.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
 
 		broadcast = flags.Bool("broadcast", defaultBroadcast, "broadcast new records")
+
+		metricsRegistration = flags.Bool("metrics.registration", defaultMetricsRegistration, "Registration of metrics on launch")
 	)
 
 	flags.Usage = usageFor(flags, "harness [flags]")
@@ -55,6 +58,25 @@ func runHarness(args []string) error {
 		logger = log.NewLogfmtLogger(os.Stdout)
 		logger = log.With(logger, "ts", log.DefaultTimestampUTC)
 		logger = level.NewFilter(logger, logLevel)
+	}
+
+	// Instrumentation
+	connectedClients := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "courier_transformer_store",
+		Name:      "connected_clients",
+		Help:      "Number of currently connected clients by modality.",
+	}, []string{"modality"})
+	apiDuration := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "courier_transformer_store",
+		Name:      "api_request_duration_seconds",
+		Help:      "API request duration in seconds.",
+		Buckets:   prometheus.DefBuckets,
+	}, []string{"method", "path", "status_code"})
+	if *metricsRegistration {
+		prometheus.MustRegister(
+			connectedClients,
+			apiDuration,
+		)
 	}
 
 	apiNetwork, apiAddress, err := parseAddr(*apiAddr, defaultAPIPort)
@@ -143,6 +165,8 @@ func runHarness(args []string) error {
 			))
 			mux.Handle("/status/", http.StripPrefix("/status", status.NewAPI(
 				log.With(logger, "component", "status_api"),
+				connectedClients.WithLabelValues("ingest"),
+				apiDuration,
 			)))
 
 			registerMetrics(mux)

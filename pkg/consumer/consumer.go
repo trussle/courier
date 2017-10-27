@@ -8,8 +8,8 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/trussle/courier/pkg/audit"
+	"github.com/trussle/courier/pkg/fifo"
 	"github.com/trussle/courier/pkg/http"
-	"github.com/trussle/courier/pkg/lru"
 	"github.com/trussle/courier/pkg/metrics"
 	"github.com/trussle/courier/pkg/models"
 	"github.com/trussle/courier/pkg/queue"
@@ -17,7 +17,9 @@ import (
 )
 
 const (
-	defaultActiveTimeout = time.Minute
+	defaultActiveTargetSize = 10
+	defaultActiveTargetAge  = time.Minute
+	defaultWaitTime         = time.Millisecond * 100
 )
 
 // Consumer reads segments from the queue, and replicates merged segments to
@@ -29,10 +31,12 @@ type Consumer struct {
 	client             *http.Client
 	queue              queue.Queue
 	log                audit.Log
-	lru                *lru.LRU
+	fifo               *fifo.FIFO
 	activeSince        time.Time
-	activeTimeout      time.Duration
+	activeTargetAge    time.Duration
+	activeTargetSize   int
 	gatherErrors       int
+	waitTime           time.Duration
 	stop               chan chan struct{}
 	consumedSegments   metrics.Counter
 	consumedRecords    metrics.Counter
@@ -59,8 +63,10 @@ func New(
 		queue:              queue,
 		log:                log,
 		activeSince:        time.Time{},
-		activeTimeout:      defaultActiveTimeout,
+		activeTargetAge:    defaultActiveTargetAge,
+		activeTargetSize:   defaultActiveTargetSize,
 		gatherErrors:       0,
+		waitTime:           defaultWaitTime,
 		stop:               make(chan chan struct{}),
 		consumedSegments:   consumedSegments,
 		consumedRecords:    consumedRecords,
@@ -71,7 +77,7 @@ func New(
 		logger:             logger,
 	}
 
-	consumer.lru = lru.NewLRU(10, consumer.onElementEviction)
+	consumer.fifo = fifo.NewFIFO(consumer.onElementEviction)
 
 	return consumer
 }
@@ -89,7 +95,7 @@ func (c *Consumer) Run() {
 			state = state()
 
 		case q := <-c.stop:
-			c.lru.Purge()
+			c.fifo.Purge()
 			close(q)
 			return
 		}
@@ -110,7 +116,7 @@ type stateFn func() stateFn
 func (c *Consumer) gather() stateFn {
 	// A naïve way to break out of the gather loop in atypical conditions.
 	if c.gatherErrors > 0 {
-		if c.lru.Len() == 0 {
+		if c.fifo.Len() == 0 {
 			// We didn't successfully consume any segments.
 			// Nothing to do but reset and try again.
 			c.gatherErrors = 0
@@ -122,18 +128,29 @@ func (c *Consumer) gather() stateFn {
 	}
 
 	// More typical exit clauses.
-	if c.lru.Capacity() || c.activeSince.Add(c.activeTimeout).After(time.Now()) {
+	var (
+		tooBig = c.fifo.Len() > c.activeTargetSize
+		tooOld = !c.activeSince.IsZero() && time.Since(c.activeSince) > c.activeTargetAge
+	)
+	if tooBig || tooOld {
 		return c.replicate
 	}
 
 	// Dequeue
-	var record models.Record
-	select {
-	case record = <-c.queue.Dequeue():
-		break
+	records, err := c.queue.Dequeue()
+	if err != nil {
+		c.gatherErrors++
+		return c.gather
 	}
 
-	c.lru.Add(record.ID(), record)
+	if len(records) == 0 {
+		time.Sleep(c.waitTime)
+		return c.gather
+	}
+
+	for _, record := range records {
+		c.fifo.Add(record.ID(), record)
+	}
 
 	c.activeSince = time.Now()
 
@@ -150,12 +167,12 @@ func (c *Consumer) replicate() stateFn {
 		debug = level.Debug(base)
 	)
 
-	if c.lru.Len() == 0 {
+	if c.fifo.Len() == 0 {
 		warn.Log("action", "len", "reason", "len is zero")
 		return c.gather
 	}
 
-	dequeued, err := c.lru.Dequeue(func(key uuid.UUID, value models.Record) error {
+	dequeued, err := c.fifo.Dequeue(func(key uuid.UUID, value models.Record) error {
 		debug.Log("action", "sending", "key", key.String())
 		return c.client.Send(value.Body())
 	})
@@ -185,7 +202,7 @@ func (c *Consumer) failure() stateFn {
 	)
 
 	txn := queue.NewTransaction()
-	for _, v := range c.lru.Slice() {
+	for _, v := range c.fifo.Slice() {
 		if err := txn.Push(v.Value.ID(), v.Value); err != nil {
 			continue
 		}
@@ -199,21 +216,21 @@ func (c *Consumer) failure() stateFn {
 	c.failedRecords.Add(float64(txn.Len()))
 
 PURGE:
-	c.lru.Purge()
+	c.fifo.Purge()
 	return c.gather
 }
 
-func (c *Consumer) onElementEviction(reason lru.EvictionReason, key uuid.UUID, value models.Record) {
+func (c *Consumer) onElementEviction(reason fifo.EvictionReason, key uuid.UUID, value models.Record) {
 	// We should fail the transaction
 	switch reason {
-	case lru.Dequeued:
+	case fifo.Dequeued:
 		// do nothing
 	default:
 		level.Warn(c.logger).Log("state", "eviction", "id", key.String(), "record", value.RecordID())
 	}
 }
 
-func (c *Consumer) commit(values []lru.KeyValue) error {
+func (c *Consumer) commit(values []fifo.KeyValue) error {
 	txn := queue.NewTransaction()
 	for _, v := range values {
 		if err := txn.Push(v.Value.ID(), v.Value); err != nil {

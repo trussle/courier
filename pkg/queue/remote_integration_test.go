@@ -34,7 +34,6 @@ func TestRemoteQueue_Integration(t *testing.T) {
 		queue.WithQueue(GetEnv("AWS_SQS_QUEUE", defaultAWSQueue)),
 		queue.WithMaxNumberOfMessages(1),
 		queue.WithVisibilityTimeout(time.Second*100),
-		queue.WithRunFrequency(time.Minute),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -91,25 +90,19 @@ func TestRemoteQueue_Integration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		go remote.Run()
+		records, err := remote.Dequeue()
+		if err != nil {
+			t.Fatal(err)
+		}
 
-		time.Sleep(time.Second)
+		if expected, actual := 1, len(records); expected > actual {
+			t.Errorf("expected: %t, actual: %t", expected, actual)
+		}
 
-		var called bool
-		for res := range remote.Dequeue() {
-			remote.Stop()
-
-			called = true
-
+		for _, res := range records {
 			if expected, actual := false, res.ID().Zero(); expected != actual {
 				t.Errorf("expected: %t, actual: %t", expected, actual)
 			}
-
-			break
-		}
-
-		if expected, actual := true, called; expected != actual {
-			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
 	})
 
@@ -128,19 +121,20 @@ func TestRemoteQueue_Integration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		go remote.Run()
+		records, err := remote.Dequeue()
+		if err != nil {
+			t.Fatal(err)
+		}
 
-		time.Sleep(time.Second)
+		if expected, actual := 1, len(records); expected > actual {
+			t.Errorf("expected: %t, actual: %t", expected, actual)
+		}
 
 		txn := queue.NewTransaction()
-		for res := range remote.Dequeue() {
-			remote.Stop()
-
+		for _, res := range records {
 			if err := txn.Push(res.ID(), res); err != nil {
 				t.Fatal(err)
 			}
-
-			break
 		}
 
 		result, err := remote.Commit(txn)
@@ -148,7 +142,7 @@ func TestRemoteQueue_Integration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if expected, actual := 1, result.Success; expected != actual {
+		if expected, actual := txn.Len(), result.Success; expected != actual {
 			t.Errorf("expected: %d, actual: %d", expected, actual)
 		}
 		if expected, actual := 0, result.Failure; expected != actual {
@@ -171,19 +165,20 @@ func TestRemoteQueue_Integration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		go remote.Run()
+		records, err := remote.Dequeue()
+		if err != nil {
+			t.Fatal(err)
+		}
 
-		time.Sleep(time.Second)
+		if expected, actual := 1, len(records); expected > actual {
+			t.Errorf("expected: %t, actual: %t", expected, actual)
+		}
 
 		txn := queue.NewTransaction()
-		for res := range remote.Dequeue() {
-			remote.Stop()
-
+		for _, res := range records {
 			if err := txn.Push(res.ID(), res); err != nil {
 				t.Fatal(err)
 			}
-
-			break
 		}
 
 		result, err := remote.Failed(txn)
@@ -191,7 +186,7 @@ func TestRemoteQueue_Integration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if expected, actual := 0, result.Success; expected != actual {
+		if expected, actual := len(records), result.Success; expected != actual {
 			t.Errorf("expected: %d, actual: %d", expected, actual)
 		}
 		if expected, actual := 0, result.Failure; expected != actual {
