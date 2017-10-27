@@ -17,10 +17,6 @@ import (
 	"github.com/trussle/courier/pkg/uuid"
 )
 
-const (
-	defaultRunFrequency = time.Millisecond * 1
-)
-
 // RemoteConfig creates a configuration to create a RemoteQueue.
 type RemoteConfig struct {
 	EC2Role             bool
@@ -28,6 +24,7 @@ type RemoteConfig struct {
 	Region, Queue       string
 	MaxNumberOfMessages int64
 	VisibilityTimeout   time.Duration
+	RunFrequency        time.Duration
 }
 
 type remoteQueue struct {
@@ -86,7 +83,7 @@ func newRemoteQueue(config *RemoteConfig, logger log.Logger) (Queue, error) {
 		queueURL:            queueURL.QueueUrl,
 		maxNumberOfMessages: aws.Int64(config.MaxNumberOfMessages),
 		visibilityTimeout:   aws.Int64(int64(config.VisibilityTimeout)),
-		freq:                defaultRunFrequency,
+		freq:                config.RunFrequency,
 		stop:                make(chan chan struct{}),
 		records:             make(chan models.Record),
 		randSource:          rand.New(rand.NewSource(time.Now().UnixNano())),
@@ -111,47 +108,60 @@ func (v *remoteQueue) Run() {
 	step := time.NewTicker(v.freq)
 	defer step.Stop()
 
+	// Cause an immediate run, then fall back to the frequency based timer.
+	v.run()
+
+	// Frequency based timer.
 	for {
 		select {
-		case <-step.C:
-			input := &sqs.ReceiveMessageInput{
-				QueueUrl:            v.queueURL,
-				MaxNumberOfMessages: v.maxNumberOfMessages,
-				MessageAttributeNames: []*string{
-					aws.String("All"),
-				},
-				WaitTimeSeconds: v.waitTime,
-			}
-
-			resp, err := v.client.ReceiveMessage(input)
-			if err != nil {
-				continue
-			}
-
-			unique := make(map[string]models.Record, len(resp.Messages))
-			for _, msg := range resp.Messages {
-				id, e := uuid.New(v.randSource)
-				if e != nil {
-					continue
-				}
-
-				unique[aws.StringValue(msg.MessageId)] = NewRecord(
-					id,
-					aws.StringValue(msg.MessageId),
-					models.Receipt(aws.StringValue(msg.ReceiptHandle)),
-					[]byte(aws.StringValue(msg.Body)),
-					time.Now(),
-				)
-			}
-
-			for _, r := range unique {
-				v.records <- r
-			}
-
 		case q := <-v.stop:
 			close(q)
 			return
+
+		case <-step.C:
+			v.run()
 		}
+	}
+}
+
+func (v *remoteQueue) run() {
+	input := &sqs.ReceiveMessageInput{
+		QueueUrl:            v.queueURL,
+		MaxNumberOfMessages: v.maxNumberOfMessages,
+		MessageAttributeNames: []*string{
+			aws.String("All"),
+		},
+		WaitTimeSeconds: v.waitTime,
+	}
+
+	resp, err := v.client.ReceiveMessage(input)
+	if err != nil {
+		return
+	}
+
+	unique := make(map[string]models.Record, len(resp.Messages))
+	for _, msg := range resp.Messages {
+		id, e := uuid.New(v.randSource)
+		if e != nil {
+			continue
+		}
+
+		unique[aws.StringValue(msg.MessageId)] = NewRecord(
+			id,
+			aws.StringValue(msg.MessageId),
+			models.Receipt(aws.StringValue(msg.ReceiptHandle)),
+			[]byte(aws.StringValue(msg.Body)),
+			time.Now(),
+		)
+	}
+
+	if err := v.changeMessageVisibility(unique); err != nil {
+		// Don't return, just continue, let's see what happens.
+		level.Warn(v.logger).Log("action", "run", "err", err)
+	}
+
+	for _, r := range unique {
+		v.records <- r
 	}
 }
 
@@ -198,6 +208,7 @@ func (v *remoteQueue) Commit(txn models.Transaction) (Result, error) {
 }
 
 func (v *remoteQueue) Failed(txn models.Transaction) (Result, error) {
+	// TODO: Send to a failure queue.
 	return Result{}, nil
 }
 
@@ -249,7 +260,9 @@ type ConfigOption func(*RemoteConfig) error
 // BuildConfig ingests configuration options to then yield a
 // RemoteConfig, and return an error if it fails during configuring.
 func BuildConfig(opts ...ConfigOption) (*RemoteConfig, error) {
-	var config RemoteConfig
+	config := RemoteConfig{
+		RunFrequency: time.Millisecond * 10,
+	}
 	for _, opt := range opts {
 		err := opt(&config)
 		if err != nil {
@@ -321,6 +334,15 @@ func WithMaxNumberOfMessages(numOfMessages int64) ConfigOption {
 func WithVisibilityTimeout(visibilityTimeout time.Duration) ConfigOption {
 	return func(config *RemoteConfig) error {
 		config.VisibilityTimeout = visibilityTimeout
+		return nil
+	}
+}
+
+// WithRunFrequency adds an RunFrequency option to the
+// configuration
+func WithRunFrequency(runFrequency time.Duration) ConfigOption {
+	return func(config *RemoteConfig) error {
+		config.RunFrequency = runFrequency
 		return nil
 	}
 }

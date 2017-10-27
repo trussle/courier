@@ -175,7 +175,7 @@ func (c *Consumer) failure() stateFn {
 		warn = level.Warn(base)
 	)
 
-	txn := NewTransaction()
+	txn := queue.NewTransaction()
 	for _, v := range c.lru.Slice() {
 		if err := txn.Push(v.Value.ID(), v.Value); err != nil {
 			continue
@@ -204,9 +204,9 @@ func (c *Consumer) onElementEviction(reason lru.EvictionReason, key uuid.UUID, v
 	}
 }
 
-func (c *Consumer) commit(queue []lru.KeyValue) error {
-	txn := NewTransaction()
-	for _, v := range queue {
+func (c *Consumer) commit(values []lru.KeyValue) error {
+	txn := queue.NewTransaction()
+	for _, v := range values {
 		if err := txn.Push(v.Value.ID(), v.Value); err != nil {
 			continue
 		}

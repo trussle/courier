@@ -1,4 +1,4 @@
-package consumer
+package queue
 
 import (
 	"github.com/trussle/courier/pkg/lru"

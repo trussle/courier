@@ -3,9 +3,14 @@ package status
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
+	"time"
 
-	errs "github.com/trussle/courier/pkg/http"
+	"github.com/go-kit/kit/log/level"
+
 	"github.com/go-kit/kit/log"
+	errs "github.com/trussle/courier/pkg/http"
+	"github.com/trussle/courier/pkg/metrics"
 )
 
 // These are the status API URL paths.
@@ -16,21 +21,42 @@ const (
 
 // API serves the status API
 type API struct {
-	logger log.Logger
-	errors errs.Error
+	logger   log.Logger
+	clients  metrics.Gauge
+	duration metrics.HistogramVec
+	errors   errs.Error
 }
 
 // NewAPI creates a API with the correct dependencies.
-func NewAPI(logger log.Logger) *API {
+func NewAPI(logger log.Logger,
+	clients metrics.Gauge,
+	duration metrics.HistogramVec,
+) *API {
 	return &API{
-		logger: logger,
-		errors: errs.NewError(logger),
+		logger:   logger,
+		clients:  clients,
+		duration: duration,
+		errors:   errs.NewError(logger),
 	}
 }
 
 func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	level.Info(a.logger).Log("method", r.Method, "url", r.URL.String())
+
 	iw := &interceptingWriter{http.StatusOK, w}
 	w = iw
+
+	// Metrics
+	a.clients.Inc()
+	defer a.clients.Dec()
+
+	defer func(begin time.Time) {
+		a.duration.WithLabelValues(
+			r.Method,
+			r.URL.Path,
+			strconv.Itoa(iw.code),
+		).Observe(time.Since(begin).Seconds())
+	}(time.Now())
 
 	// Routing table
 	method, path := r.Method, r.URL.Path

@@ -4,15 +4,12 @@ package queue_test
 
 import (
 	"math/rand"
-	"reflect"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/go-kit/kit/log"
-	"github.com/trussle/courier/pkg/models"
 	"github.com/trussle/courier/pkg/queue"
-	"github.com/trussle/courier/pkg/uuid"
 )
 
 const (
@@ -35,8 +32,9 @@ func TestRemoteQueue_Integration(t *testing.T) {
 		queue.WithSecret(GetEnv("AWS_SECRET", defaultAWSSecret)),
 		queue.WithToken(GetEnv("AWS_TOKEN", defaultAWSToken)),
 		queue.WithQueue(GetEnv("AWS_SQS_QUEUE", defaultAWSQueue)),
-		queue.WithMaxNumberOfMessages(10),
+		queue.WithMaxNumberOfMessages(1),
 		queue.WithVisibilityTimeout(time.Second*100),
+		queue.WithRunFrequency(time.Minute),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -62,22 +60,142 @@ func TestRemoteQueue_Integration(t *testing.T) {
 	})
 
 	t.Run("enqueue a value", func(t *testing.T) {
-		queue, err := queue.New(config, log.NewNopLogger())
+		remote, err := queue.New(config, log.NewNopLogger())
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		go queue.Run()
-		defer queue.Stop()
-
-		rec := TestRecord{
-			id:   uuid.MustNew(rnd),
-			body: []byte("hello, world!"),
+		rec, err := queue.GenerateQueueRecord(rnd)
+		if err != nil {
+			t.Fatal(err)
 		}
 
-		err = queue.Enqueue(rec)
+		err = remote.Enqueue(rec)
 		if expected, actual := true, err == nil; expected != actual {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
+		}
+	})
+
+	t.Run("dequeue a value", func(t *testing.T) {
+		remote, err := queue.New(config, log.NewNopLogger())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rec, err := queue.GenerateQueueRecord(rnd)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if err := remote.Enqueue(rec); err != nil {
+			t.Fatal(err)
+		}
+
+		go remote.Run()
+
+		time.Sleep(time.Second)
+
+		var called bool
+		for res := range remote.Dequeue() {
+			remote.Stop()
+
+			called = true
+
+			if expected, actual := false, res.ID().Zero(); expected != actual {
+				t.Errorf("expected: %t, actual: %t", expected, actual)
+			}
+
+			break
+		}
+
+		if expected, actual := true, called; expected != actual {
+			t.Errorf("expected: %t, actual: %t", expected, actual)
+		}
+	})
+
+	t.Run("dequeue a value and commit", func(t *testing.T) {
+		remote, err := queue.New(config, log.NewNopLogger())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rec, err := queue.GenerateQueueRecord(rnd)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if err := remote.Enqueue(rec); err != nil {
+			t.Fatal(err)
+		}
+
+		go remote.Run()
+
+		time.Sleep(time.Second)
+
+		txn := queue.NewTransaction()
+		for res := range remote.Dequeue() {
+			remote.Stop()
+
+			if err := txn.Push(res.ID(), res); err != nil {
+				t.Fatal(err)
+			}
+
+			break
+		}
+
+		result, err := remote.Commit(txn)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if expected, actual := 1, result.Success; expected != actual {
+			t.Errorf("expected: %d, actual: %d", expected, actual)
+		}
+		if expected, actual := 0, result.Failure; expected != actual {
+			t.Errorf("expected: %d, actual: %d", expected, actual)
+		}
+	})
+
+	t.Run("dequeue a value and failed", func(t *testing.T) {
+		remote, err := queue.New(config, log.NewNopLogger())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rec, err := queue.GenerateQueueRecord(rnd)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if err := remote.Enqueue(rec); err != nil {
+			t.Fatal(err)
+		}
+
+		go remote.Run()
+
+		time.Sleep(time.Second)
+
+		txn := queue.NewTransaction()
+		for res := range remote.Dequeue() {
+			remote.Stop()
+
+			if err := txn.Push(res.ID(), res); err != nil {
+				t.Fatal(err)
+			}
+
+			break
+		}
+
+		result, err := remote.Failed(txn)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if expected, actual := 0, result.Success; expected != actual {
+			t.Errorf("expected: %d, actual: %d", expected, actual)
+		}
+		if expected, actual := 0, result.Failure; expected != actual {
+			t.Errorf("expected: %d, actual: %d", expected, actual)
 		}
 	})
 }
@@ -88,38 +206,4 @@ func GetEnv(key string, defaultValue string) (value string) {
 		return
 	}
 	return defaultValue
-}
-
-type TestRecord struct {
-	id        uuid.UUID
-	messageID string
-	receipt   models.Receipt
-	body      []byte
-	timestamp time.Time
-}
-
-func (t TestRecord) ID() uuid.UUID {
-	return t.id
-}
-
-func (t TestRecord) Body() []byte {
-	return t.body
-}
-
-func (t TestRecord) Receipt() models.Receipt {
-	return t.receipt
-}
-
-func (t TestRecord) Commit(txn models.Transaction) error {
-	return txn.Push(t.id, t.receipt)
-}
-
-func (t TestRecord) Failed(txn models.Transaction) error {
-	return txn.Push(t.id, t.receipt)
-}
-
-// Equal checks the equality of records against each other
-func (t TestRecord) Equal(other queue.Record) bool {
-	return t.ID().Equal(other.ID()) &&
-		reflect.DeepEqual(t.Body(), other.Body())
 }

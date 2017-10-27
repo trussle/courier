@@ -12,7 +12,7 @@ func TestConfigBuild(t *testing.T) {
 	t.Parallel()
 
 	t.Run("build", func(t *testing.T) {
-		fn := func(id, secret, token, region, queue string, numOfMessages, timeout int64) bool {
+		fn := func(id, secret, token, region, queue string, numOfMessages, timeout, frequency int64) bool {
 			config, err := BuildConfig(
 				WithEC2Role(false),
 				WithID(id),
@@ -22,6 +22,7 @@ func TestConfigBuild(t *testing.T) {
 				WithQueue(queue),
 				WithMaxNumberOfMessages(numOfMessages),
 				WithVisibilityTimeout(time.Duration(timeout)),
+				WithRunFrequency(time.Duration(frequency)),
 			)
 			if err != nil {
 				t.Fatal(err)
@@ -32,7 +33,8 @@ func TestConfigBuild(t *testing.T) {
 				config.Region == region &&
 				config.Queue == queue &&
 				config.MaxNumberOfMessages == numOfMessages &&
-				config.VisibilityTimeout == time.Duration(timeout)
+				config.VisibilityTimeout == time.Duration(timeout) &&
+				config.RunFrequency == time.Duration(frequency)
 		}
 
 		if err := quick.Check(fn, nil); err != nil {
