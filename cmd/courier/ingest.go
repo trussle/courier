@@ -212,6 +212,7 @@ func runIngest(args []string) error {
 		queue.WithQueue(*awsSQSQueue),
 		queue.WithMaxNumberOfMessages(int64(*maxNumberOfMessages)),
 		queue.WithVisibilityTimeout(visibilityTimeoutDuration),
+		queue.WithRunFrequency(time.Millisecond*10),
 	)
 	if err != nil {
 		return errors.Wrap(err, "queue remote config")
@@ -291,6 +292,8 @@ func runIngest(args []string) error {
 			mux := http.NewServeMux()
 			mux.Handle("/status/", http.StripPrefix("/status", status.NewAPI(
 				log.With(logger, "component", "status_api"),
+				connectedClients.WithLabelValues("ingest"),
+				apiDuration,
 			)))
 
 			registerMetrics(mux)
