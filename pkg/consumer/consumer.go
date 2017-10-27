@@ -16,6 +16,10 @@ import (
 	"github.com/trussle/courier/pkg/uuid"
 )
 
+const (
+	defaultActiveTimeout = time.Minute
+)
+
 // Consumer reads segments from the queue, and replicates merged segments to
 // the rest of the cluster. It's implemented as a state machine: gather
 // segments, replicate, commit, and repeat. All failures invalidate the entire
@@ -26,6 +30,8 @@ type Consumer struct {
 	queue              queue.Queue
 	log                audit.Log
 	lru                *lru.LRU
+	activeSince        time.Time
+	activeTimeout      time.Duration
 	gatherErrors       int
 	stop               chan chan struct{}
 	consumedSegments   metrics.Counter
@@ -34,7 +40,6 @@ type Consumer struct {
 	replicatedRecords  metrics.Counter
 	failedSegments     metrics.Counter
 	failedRecords      metrics.Counter
-	gatherWaitTime     time.Duration
 	logger             log.Logger
 }
 
@@ -53,6 +58,8 @@ func New(
 		client:             client,
 		queue:              queue,
 		log:                log,
+		activeSince:        time.Time{},
+		activeTimeout:      defaultActiveTimeout,
 		gatherErrors:       0,
 		stop:               make(chan chan struct{}),
 		consumedSegments:   consumedSegments,
@@ -115,7 +122,7 @@ func (c *Consumer) gather() stateFn {
 	}
 
 	// More typical exit clauses.
-	if c.lru.Capacity() {
+	if c.lru.Capacity() || c.activeSince.Add(c.activeTimeout).After(time.Now()) {
 		return c.replicate
 	}
 
@@ -127,6 +134,8 @@ func (c *Consumer) gather() stateFn {
 	}
 
 	c.lru.Add(record.ID(), record)
+
+	c.activeSince = time.Now()
 
 	c.consumedSegments.Inc()
 	c.consumedRecords.Add(float64(1))
