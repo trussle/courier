@@ -1,18 +1,21 @@
 package consumer
 
 import (
+	"math/rand"
 	"sync"
 	"time"
 
-	"github.com/SimonRichardson/resilience/retrier"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/pkg/errors"
 	"github.com/trussle/courier/pkg/audit"
+	"github.com/trussle/courier/pkg/cluster"
 	"github.com/trussle/courier/pkg/fifo"
 	"github.com/trussle/courier/pkg/http"
 	"github.com/trussle/courier/pkg/metrics"
 	"github.com/trussle/courier/pkg/models"
 	"github.com/trussle/courier/pkg/queue"
+	"github.com/trussle/courier/pkg/store"
 	"github.com/trussle/courier/pkg/uuid"
 )
 
@@ -28,15 +31,18 @@ const (
 // batch.
 type Consumer struct {
 	mutex              sync.Mutex
+	peer               cluster.Peer
 	client             *http.Client
 	queue              queue.Queue
 	log                audit.Log
+	store              store.Store
 	fifo               *fifo.FIFO
 	activeSince        time.Time
 	activeTargetAge    time.Duration
 	activeTargetSize   int
 	gatherErrors       int
 	waitTime           time.Duration
+	replicationFactor  int
 	stop               chan chan struct{}
 	consumedSegments   metrics.Counter
 	consumedRecords    metrics.Counter
@@ -49,9 +55,11 @@ type Consumer struct {
 
 // New creates a consumer.
 func New(
+	peer cluster.Peer,
 	client *http.Client,
 	queue queue.Queue,
 	log audit.Log,
+	store store.Store,
 	consumedSegments, consumedRecords metrics.Counter,
 	replicatedSegments, replicatedRecords metrics.Counter,
 	failedSegments, failedRecords metrics.Counter,
@@ -59,9 +67,11 @@ func New(
 ) *Consumer {
 	consumer := &Consumer{
 		mutex:              sync.Mutex{},
+		peer:               peer,
 		client:             client,
 		queue:              queue,
 		log:                log,
+		store:              store,
 		activeSince:        time.Time{},
 		activeTargetAge:    defaultActiveTargetAge,
 		activeTargetSize:   defaultActiveTargetSize,
@@ -149,7 +159,10 @@ func (c *Consumer) gather() stateFn {
 	}
 
 	for _, record := range records {
-		c.fifo.Add(record.ID(), record)
+		// We have already processed the record.
+		if !c.store.Contains(record.ID()) {
+			c.fifo.Add(record.ID(), record)
+		}
 	}
 
 	c.activeSince = time.Now()
@@ -172,17 +185,20 @@ func (c *Consumer) replicate() stateFn {
 		return c.gather
 	}
 
+	// We want to replicate all things first
 	dequeued, err := c.fifo.Dequeue(func(key uuid.UUID, value models.Record) error {
 		debug.Log("action", "sending", "key", key.String())
 		return c.client.Send(value.Body())
 	})
 
 	// even if we err out, we should send them in a transaction
-	go func() {
-		if err := c.commit(dequeued); err != nil {
-			warn.Log("action", "commit", "err", err)
-		}
-	}()
+	if err := c.commit(dequeued); err != nil {
+		warn.Log("action", "commit", "err", err)
+	}
+
+	if err := c.gossip(dequeued); err != nil {
+		warn.Log("action", "gossip", "err", err)
+	}
 
 	if err != nil {
 		warn.Log("action", "dequeue", "err", err)
@@ -196,11 +212,6 @@ func (c *Consumer) replicate() stateFn {
 }
 
 func (c *Consumer) failure() stateFn {
-	var (
-		base = log.With(c.logger, "state", "replicate")
-		warn = level.Warn(base)
-	)
-
 	txn := queue.NewTransaction()
 	for _, v := range c.fifo.Slice() {
 		if err := txn.Push(v.Value.ID(), v.Value); err != nil {
@@ -208,7 +219,7 @@ func (c *Consumer) failure() stateFn {
 		}
 	}
 	if _, err := c.queue.Failed(txn); err != nil {
-		warn.Log("state", "failure", "err", err)
+		level.Warn(c.logger).Log("state", "failure", "err", err)
 		goto PURGE
 	}
 
@@ -231,6 +242,11 @@ func (c *Consumer) onElementEviction(reason fifo.EvictionReason, key uuid.UUID, 
 }
 
 func (c *Consumer) commit(values []fifo.KeyValue) error {
+	var (
+		base = log.With(c.logger, "state", "commit")
+		warn = level.Warn(base)
+	)
+
 	txn := queue.NewTransaction()
 	for _, v := range values {
 		if err := txn.Push(v.Value.ID(), v.Value); err != nil {
@@ -239,12 +255,9 @@ func (c *Consumer) commit(values []fifo.KeyValue) error {
 	}
 
 	// Try and append to the audit log, if it fails do nothing but continue.
-	try := retrier.New(3, 10*time.Millisecond)
-	if err := try.Run(func() error {
-		return c.log.Append(txn)
-	}); err != nil {
+	if err := c.log.Append(txn); err != nil {
 		// do nothing here, we tried!
-		level.Error(c.logger).Log("state", "commit", "err", err)
+		warn.Log("state", "commit", "err", err)
 	}
 
 	if _, err := c.queue.Commit(txn); err != nil {
@@ -252,4 +265,45 @@ func (c *Consumer) commit(values []fifo.KeyValue) error {
 	}
 
 	return txn.Flush()
+}
+
+func (c *Consumer) gossip(values []fifo.KeyValue) error {
+	var (
+		base = log.With(c.logger, "state", "gossip")
+		warn = level.Warn(base)
+	)
+
+	// Replicate the segment to the cluster.
+	peers, err := c.peer.Current(cluster.PeerTypeStore)
+	if err != nil {
+		return err
+	}
+
+	var (
+		indices    = rand.Perm(len(peers))
+		replicated = 0
+	)
+	if want, got := c.replicationFactor, len(peers); got < want {
+		return errors.Errorf("replication currently impossible (factor: %d, actual: %d)", want, got)
+	}
+
+	data := []byte{}
+	for i := 0; i < len(indices) && replicated < c.replicationFactor; i++ {
+		var (
+			index  = indices[i]
+			target = peers[index]
+		)
+		err := c.client.Send(data)
+		if err != nil {
+			warn.Log("target", target, "during", "replication", "err", err)
+			continue
+		}
+		replicated++
+	}
+
+	if replicated < c.replicationFactor {
+		return errors.Errorf("failed to fully replicate (factor: %d, actual: %d)", c.replicationFactor, replicated)
+	}
+
+	return nil
 }
