@@ -1,10 +1,10 @@
-hash: f05a4e0e18ad76a81c5dc8b56bf815592d2f410fb96cc67c978b6f43e18fcc6b
-updated: 2017-10-26T21:57:52.117174576+01:00
+hash: cfe89b5a74b9701ddcf027a871aa4e6f384b237a107dcb72d50affede8ec3925
+updated: 2017-10-30T20:03:12.338294224Z
 imports:
 - name: github.com/armon/go-metrics
   version: 9a4b6e10bed6220a1665955aa2b75afc91eb10b3
 - name: github.com/aws/aws-sdk-go
-  version: f5adf4d6071ab34570bf53844b837f8cf0d2694e
+  version: c30658e062b4460a71ccb3514be7987149b39263
   subpackages:
   - aws
   - aws/awserr
@@ -60,6 +60,29 @@ imports:
   - proto
 - name: github.com/gorilla/mux
   version: 7625a85c14e615274a4ee4bc8654f72310a563e4
+- name: github.com/hashicorp/errwrap
+  version: 7554cd9344cec97297fa6649b055a8c98c2a1e55
+- name: github.com/hashicorp/go-immutable-radix
+  version: 8aac2701530899b64bdea735a1de8da899815220
+- name: github.com/hashicorp/go-msgpack
+  version: fa3f63826f7c23912c15263591e65d54d080b458
+  subpackages:
+  - codec
+- name: github.com/hashicorp/go-multierror
+  version: 83588e72410abfbe4df460eeb6f30841ae47d4c4
+- name: github.com/hashicorp/go-sockaddr
+  version: 9b4c5fa5b10a683339a270d664474b9f4aee62fc
+- name: github.com/hashicorp/golang-lru
+  version: 0a025b7e63adc15a622f29b0b2c4c3848243bbf6
+  subpackages:
+  - simplelru
+- name: github.com/hashicorp/memberlist
+  version: 687988a0b5daaf7ed5051e5e374aef27f8254822
+- name: github.com/hashicorp/serf
+  version: c20a0b1b1ea9eb8168bcdec0116688fa9254e449
+  subpackages:
+  - coordinate
+  - serf
 - name: github.com/jmespath/go-jmespath
   version: bd40a432e4c76585ef6b72d3fd96fb9b6dc7b68d
 - name: github.com/kr/logfmt
@@ -70,6 +93,10 @@ imports:
   version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
+- name: github.com/miekg/dns
+  version: a5852667e3c36e2e0b0a69ab43869e00e95aacdf
+  subpackages:
+  - internal/socket
 - name: github.com/pborman/uuid
   version: e790cca94e6cc75c7064b1332e63811d4aae1a53
 - name: github.com/pkg/errors
@@ -94,7 +121,9 @@ imports:
   subpackages:
   - xfs
 - name: github.com/prometheus/prometheus
-  version: 323556b0251b0ab9665ea2b411af1067cc147097
+  version: d93273c4dcfbbeb5b0c137a7ac19911e7a47a7e3
+- name: github.com/sean-/seed
+  version: e2103e2c35297fb7e17febb81e49b312087a2372
 - name: github.com/SimonRichardson/betwixt
   version: 6bf309fe8d963cc635eeabbf73d82430c72761e5
 - name: github.com/SimonRichardson/flagset
@@ -115,7 +144,7 @@ imports:
   - lock
   - mmap
 - name: golang.org/x/net
-  version: 4b14673ba32bee7f5ac0f990a48f033919fd418b
+  version: c73622c77280266305273cb545f54516ced95b93
   subpackages:
   - context
 testImports: []

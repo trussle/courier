@@ -21,6 +21,9 @@ import:
   - package: github.com/SimonRichardson/betwixt
   - package: github.com/SimonRichardson/resilience
   - package: github.com/SimonRichardson/flagset
+  - package: github.com/hashicorp/go-sockaddr
+  - package: github.com/hashicorp/memberlist
+  - package: github.com/hashicorp/serf
   - package: github.com/gorilla/mux
   - package: github.com/trussle/fsys
   - package: github.com/aws/aws-sdk-go

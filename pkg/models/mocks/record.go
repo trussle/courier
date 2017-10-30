@@ -105,3 +105,15 @@ func (m *MockRecord) Receipt() models.Receipt {
 func (mr *MockRecordMockRecorder) Receipt() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Receipt", reflect.TypeOf((*MockRecord)(nil).Receipt))
 }
+
+// RecordID mocks base method
+func (m *MockRecord) RecordID() string {
+	ret := m.ctrl.Call(m, "RecordID")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// RecordID indicates an expected call of RecordID
+func (mr *MockRecordMockRecorder) RecordID() *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordID", reflect.TypeOf((*MockRecord)(nil).RecordID))
+}

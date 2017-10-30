@@ -16,7 +16,7 @@ install:
 	go get github.com/mattn/goveralls
 	go get github.com/golang/mock/mockgen
 	go get github.com/prometheus/client_golang/prometheus
-	glide install
+	glide install --strip-vendor
 
 .PHONY: build
 build: dist/courier
@@ -27,6 +27,14 @@ dist/courier:
 pkg/audit/mocks/log.go:
 	mockgen -package=mocks -destination=pkg/audit/mocks/log.go ${PATH_COURIER}/pkg/audit Log
 	$(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/audit/mocks/log.go
+
+pkg/cluster/mocks/peer.go:
+	mockgen -package=mocks -destination=pkg/cluster/mocks/peer.go ${PATH_COURIER}/pkg/cluster Peer
+	$(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/cluster/mocks/peer.go
+
+pkg/members/mocks/members.go:
+	mockgen -package=mocks -destination=pkg/members/mocks/members.go ${PATH_COURIER}/pkg/members Members,MemberList,Member
+	$(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/members/mocks/members.go
 
 pkg/metrics/mocks/metrics.go:
 	mockgen -package=mocks -destination=pkg/metrics/mocks/metrics.go ${PATH_COURIER}/pkg/metrics Gauge,HistogramVec,Counter
@@ -51,6 +59,8 @@ pkg/queue/mocks/queue.go:
 .PHONY: build-mocks
 build-mocks: FORCE
 	$(MAKE) pkg/audit/mocks/log.go
+	$(MAKE) pkg/cluster/mocks/peer.go
+	$(MAKE) pkg/members/mocks/members.go
 	$(MAKE) pkg/metrics/mocks/metrics.go
 	$(MAKE) pkg/metrics/mocks/observer.go
 	$(MAKE) pkg/models/mocks/record.go
@@ -60,6 +70,8 @@ build-mocks: FORCE
 .PHONY: clean-mocks
 clean-mocks: FORCE
 	rm -f pkg/audit/mocks/log.go
+	rm -f pkg/cluster/mocks/peer.go
+	rm -f pkg/members/mocks/members.go
 	rm -f pkg/metrics/mocks/metrics.go
 	rm -f pkg/metrics/mocks/observer.go
 	rm -f pkg/models/mocks/record.go

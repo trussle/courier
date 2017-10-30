@@ -48,10 +48,11 @@ func (mr *MockQueueMockRecorder) Commit(arg0 interface{}) *gomock.Call {
 }
 
 // Dequeue mocks base method
-func (m *MockQueue) Dequeue() <-chan models.Record {
+func (m *MockQueue) Dequeue() ([]models.Record, error) {
 	ret := m.ctrl.Call(m, "Dequeue")
-	ret0, _ := ret[0].(<-chan models.Record)
-	return ret0
+	ret0, _ := ret[0].([]models.Record)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Dequeue indicates an expected call of Dequeue
@@ -82,24 +83,4 @@ func (m *MockQueue) Failed(arg0 models.Transaction) (queue.Result, error) {
 // Failed indicates an expected call of Failed
 func (mr *MockQueueMockRecorder) Failed(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Failed", reflect.TypeOf((*MockQueue)(nil).Failed), arg0)
-}
-
-// Run mocks base method
-func (m *MockQueue) Run() {
-	m.ctrl.Call(m, "Run")
-}
-
-// Run indicates an expected call of Run
-func (mr *MockQueueMockRecorder) Run() *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MockQueue)(nil).Run))
-}
-
-// Stop mocks base method
-func (m *MockQueue) Stop() {
-	m.ctrl.Call(m, "Stop")
-}
-
-// Stop indicates an expected call of Stop
-func (mr *MockQueueMockRecorder) Stop() *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockQueue)(nil).Stop))
 }
