@@ -1,7 +1,10 @@
 package audit
 
-import "testing"
-import "github.com/trussle/courier/pkg/queue"
+import (
+	"testing"
+
+	"github.com/trussle/courier/pkg/queue"
+)
 
 func TestNop(t *testing.T) {
 	t.Parallel()

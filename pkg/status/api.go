@@ -6,9 +6,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-kit/kit/log/level"
-
 	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	errs "github.com/trussle/courier/pkg/http"
 	"github.com/trussle/courier/pkg/metrics"
 )

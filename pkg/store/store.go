@@ -1,16 +1,16 @@
 package store
 
 import (
-	"github.com/trussle/courier/pkg/models"
 	"github.com/trussle/courier/pkg/uuid"
 )
 
-// Store holds records with associated identifiers
+// Store holds identifiers with associated records
 type Store interface {
 
-	// Add a record to a associated to the store.
-	Add(uuid.UUID, models.Record) error
+	// Add a transaction of identifiers to a associated to the store.
+	Add([]uuid.UUID) error
 
-	// Contains checks to see a record is stored with in the store.
-	Contains(uuid.UUID) bool
+	// Intersection reports back the union and difference of the identifiers
+	// found with in the store.
+	Intersection([]uuid.UUID) (union, difference []uuid.UUID, err error)
 }

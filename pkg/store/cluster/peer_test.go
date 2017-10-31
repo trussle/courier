@@ -10,8 +10,8 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/golang/mock/gomock"
 	"github.com/pkg/errors"
-	"github.com/trussle/courier/pkg/members"
-	"github.com/trussle/courier/pkg/members/mocks"
+	"github.com/trussle/courier/pkg/store/members"
+	"github.com/trussle/courier/pkg/store/members/mocks"
 )
 
 func TestPeerType(t *testing.T) {

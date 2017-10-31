@@ -8,7 +8,7 @@ import (
 	"testing/quick"
 	"time"
 
-	"github.com/trussle/courier/pkg/fifo"
+	"github.com/trussle/courier/pkg/consumer/fifo"
 	"github.com/trussle/courier/pkg/models"
 	"github.com/trussle/courier/pkg/uuid"
 )

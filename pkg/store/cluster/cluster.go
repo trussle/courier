@@ -1,6 +1,6 @@
 package cluster
 
-import "github.com/trussle/courier/pkg/members"
+import "github.com/trussle/courier/pkg/store/members"
 
 // Reason defines a type of reason a peer will notify the callback
 type Reason string

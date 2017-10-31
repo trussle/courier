@@ -1,16 +1,13 @@
 package consumer
 
 import (
-	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-	"github.com/pkg/errors"
 	"github.com/trussle/courier/pkg/audit"
-	"github.com/trussle/courier/pkg/cluster"
-	"github.com/trussle/courier/pkg/fifo"
+	"github.com/trussle/courier/pkg/consumer/fifo"
 	"github.com/trussle/courier/pkg/http"
 	"github.com/trussle/courier/pkg/metrics"
 	"github.com/trussle/courier/pkg/models"
@@ -31,7 +28,6 @@ const (
 // batch.
 type Consumer struct {
 	mutex              sync.Mutex
-	peer               cluster.Peer
 	client             *http.Client
 	queue              queue.Queue
 	log                audit.Log
@@ -55,7 +51,6 @@ type Consumer struct {
 
 // New creates a consumer.
 func New(
-	peer cluster.Peer,
 	client *http.Client,
 	queue queue.Queue,
 	log audit.Log,
@@ -67,7 +62,6 @@ func New(
 ) *Consumer {
 	consumer := &Consumer{
 		mutex:              sync.Mutex{},
-		peer:               peer,
 		client:             client,
 		queue:              queue,
 		log:                log,
@@ -158,11 +152,14 @@ func (c *Consumer) gather() stateFn {
 		return c.gather
 	}
 
-	for _, record := range records {
-		// We have already processed the record.
-		if !c.store.Contains(record.ID()) {
-			c.fifo.Add(record.ID(), record)
-		}
+	// Find if any records have intersected with the store records.
+	_, difference, err := c.store.Intersection(records)
+	if err != nil {
+		difference = records
+	}
+
+	for _, record := range difference {
+		c.fifo.Add(record.ID(), record)
 	}
 
 	c.activeSince = time.Now()
@@ -194,10 +191,6 @@ func (c *Consumer) replicate() stateFn {
 	// even if we err out, we should send them in a transaction
 	if err := c.commit(dequeued); err != nil {
 		warn.Log("action", "commit", "err", err)
-	}
-
-	if err := c.gossip(dequeued); err != nil {
-		warn.Log("action", "gossip", "err", err)
 	}
 
 	if err != nil {
@@ -264,46 +257,9 @@ func (c *Consumer) commit(values []fifo.KeyValue) error {
 		return err
 	}
 
-	return txn.Flush()
-}
-
-func (c *Consumer) gossip(values []fifo.KeyValue) error {
-	var (
-		base = log.With(c.logger, "state", "gossip")
-		warn = level.Warn(base)
-	)
-
-	// Replicate the segment to the cluster.
-	peers, err := c.peer.Current(cluster.PeerTypeStore)
-	if err != nil {
+	if _, err := c.store.Add(txn); err != nil {
 		return err
 	}
 
-	var (
-		indices    = rand.Perm(len(peers))
-		replicated = 0
-	)
-	if want, got := c.replicationFactor, len(peers); got < want {
-		return errors.Errorf("replication currently impossible (factor: %d, actual: %d)", want, got)
-	}
-
-	data := []byte{}
-	for i := 0; i < len(indices) && replicated < c.replicationFactor; i++ {
-		var (
-			index  = indices[i]
-			target = peers[index]
-		)
-		err := c.client.Send(data)
-		if err != nil {
-			warn.Log("target", target, "during", "replication", "err", err)
-			continue
-		}
-		replicated++
-	}
-
-	if replicated < c.replicationFactor {
-		return errors.Errorf("failed to fully replicate (factor: %d, actual: %d)", c.replicationFactor, replicated)
-	}
-
-	return nil
+	return txn.Flush()
 }
