@@ -38,7 +38,6 @@ type Consumer struct {
 	activeTargetSize   int
 	gatherErrors       int
 	waitTime           time.Duration
-	replicationFactor  int
 	stop               chan chan struct{}
 	consumedSegments   metrics.Counter
 	consumedRecords    metrics.Counter
@@ -153,13 +152,27 @@ func (c *Consumer) gather() stateFn {
 	}
 
 	// Find if any records have intersected with the store records.
-	_, difference, err := c.store.Intersection(records)
-	if err != nil {
-		difference = records
+	var (
+		values = make(map[string]models.Record)
+		idents = make([]string, len(records))
+	)
+
+	for k, v := range records {
+		id := v.RecordID()
+
+		values[id] = v
+		idents[k] = id
 	}
 
-	for _, record := range difference {
-		c.fifo.Add(record.ID(), record)
+	_, difference, err := c.store.Intersection(idents)
+	if err != nil {
+		difference = idents
+	}
+
+	for _, unique := range difference {
+		if record, ok := values[unique]; ok {
+			c.fifo.Add(record.ID(), record)
+		}
 	}
 
 	c.activeSince = time.Now()
@@ -250,15 +263,19 @@ func (c *Consumer) commit(values []fifo.KeyValue) error {
 	// Try and append to the audit log, if it fails do nothing but continue.
 	if err := c.log.Append(txn); err != nil {
 		// do nothing here, we tried!
-		warn.Log("state", "commit", "err", err)
+		warn.Log("state", "commit", "action", "log", "err", err)
 	}
 
 	if _, err := c.queue.Commit(txn); err != nil {
 		return err
 	}
 
-	if _, err := c.store.Add(txn); err != nil {
-		return err
+	idents := make([]string, len(values))
+	for k, v := range values {
+		idents[k] = v.Value.RecordID()
+	}
+	if _, err := c.store.Add(idents); err != nil {
+		warn.Log("state", "commit", "action", "store", "err", err)
 	}
 
 	return txn.Flush()

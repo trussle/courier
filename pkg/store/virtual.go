@@ -1,39 +1,37 @@
 package store
 
 import (
-	"github.com/trussle/courier/pkg/lru"
-	"github.com/trussle/courier/pkg/models"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/courier/pkg/store/fifo"
 )
 
 type virtualStore struct {
-	lru *lru.LRU
+	fifo *fifo.FIFO
 }
 
 func newVirtualStore(size int) Store {
 	store := &virtualStore{}
-	store.lru = lru.NewLRU(size, store.onElementEviction)
+	store.fifo = fifo.NewFIFO(size, store.onElementEviction)
 	return store
 }
 
-func (v *virtualStore) Add(txn models.Transaction) error {
-	return txn.Walk(func(key uuid.UUID, value models.Record) error {
-		v.lru.Add(key, value)
-		return nil
-	})
+func (v *virtualStore) Add(idents []string) error {
+	for _, ident := range idents {
+		v.fifo.Add(ident)
+	}
+	return nil
 }
 
-func (v *virtualStore) Intersection(m []models.Record) (union, difference []models.Record, err error) {
-	for _, r := range m {
-		if v.lru.Contains(r.ID()) {
-			union = append(union, r)
+func (v *virtualStore) Intersection(idents []string) (union, difference []string, err error) {
+	for _, ident := range idents {
+		if v.fifo.Contains(ident) {
+			union = append(union, ident)
 		} else {
-			difference = append(difference, r)
+			difference = append(difference, ident)
 		}
 	}
 	return
 }
 
-func (v *virtualStore) onElementEviction(reason lru.EvictionReason, key uuid.UUID, value models.Record) {
+func (v *virtualStore) onElementEviction(reason fifo.EvictionReason, key string) {
 	// do nothing
 }

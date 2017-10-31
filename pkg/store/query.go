@@ -68,8 +68,8 @@ type IntersectionQueryResult struct {
 	Errors     errs.Error
 	Params     IntersectionQueryParams `json:"query"`
 	Duration   string                  `json:"duration"`
-	Union      []uuid.UUID             `json:"union"`
-	Difference []uuid.UUID             `json:"difference"`
+	Union      []string                `json:"union"`
+	Difference []string                `json:"difference"`
 }
 
 // EncodeTo encodes the IntersectionQueryResult to the HTTP response writer.
@@ -78,8 +78,8 @@ func (qr *IntersectionQueryResult) EncodeTo(w http.ResponseWriter) {
 	w.Header().Set(httpHeaderDuration, qr.Duration)
 
 	if err := json.NewEncoder(w).Encode(struct {
-		Union      []uuid.UUID `json:"union"`
-		Difference []uuid.UUID `json:"difference"`
+		Union      []string `json:"union"`
+		Difference []string `json:"difference"`
 	}{
 		Union:      qr.Union,
 		Difference: qr.Difference,
