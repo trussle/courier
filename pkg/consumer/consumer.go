@@ -274,7 +274,7 @@ func (c *Consumer) commit(values []fifo.KeyValue) error {
 	for k, v := range values {
 		idents[k] = v.Value.RecordID()
 	}
-	if _, err := c.store.Add(idents); err != nil {
+	if err := c.store.Add(idents); err != nil {
 		warn.Log("state", "commit", "action", "store", "err", err)
 	}
 
