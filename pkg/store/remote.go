@@ -9,11 +9,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/trussle/courier/pkg/store/client"
 	"github.com/trussle/courier/pkg/store/cluster"
-	"github.com/trussle/courier/pkg/store/fifo"
 )
 
 type remoteStore struct {
-	fifo              *fifo.FIFO
 	client            *client.Client
 	peer              cluster.Peer
 	replicationFactor int
@@ -21,14 +19,12 @@ type remoteStore struct {
 }
 
 func newRemoteStore(size, replicationFactor int, peer cluster.Peer, logger log.Logger) Store {
-	store := &remoteStore{
+	return &remoteStore{
 		client:            client.NewClient(http.DefaultClient),
 		peer:              peer,
 		replicationFactor: replicationFactor,
 		logger:            logger,
 	}
-	store.fifo = fifo.NewFIFO(size, store.onElementEviction)
-	return store
 }
 
 func (v *remoteStore) Add(idents []string) error {
@@ -47,26 +43,19 @@ func (v *remoteStore) Intersection(idents []string) (union, difference []string,
 		return
 	}
 
-	var identifiers map[string]struct{}
-	identifiers, err = v.gather(instances, idents)
+	var intersections []Intersections
+	intersections, err = v.gather(instances, idents)
 	if err != nil {
 		return
 	}
 
-	// Intersection
-	for _, v := range idents {
-		if _, ok := identifiers[v]; ok {
-			union = append(union, v)
-		} else {
-			difference = append(difference, v)
-		}
+	// Sum intersections
+	for _, v := range intersections {
+		union = append(union, v.Union...)
+		difference = append(difference, v.Difference...)
 	}
 
 	return
-}
-
-func (v *remoteStore) onElementEviction(reason fifo.EvictionReason, key string) {
-	// do nothing
 }
 
 func (v *remoteStore) storeInstances() ([]string, error) {
@@ -116,16 +105,10 @@ func (v *remoteStore) replicate(instances, idents []string) error {
 		return errors.Errorf("failed to fully replicate")
 	}
 
-	for _, ident := range idents {
-		if !v.fifo.Add(ident) {
-			log.With(v.logger).Log("action", "add failure")
-		}
-	}
-
 	return nil
 }
 
-func (v *remoteStore) gather(instances, idents []string) (map[string]struct{}, error) {
+func (v *remoteStore) gather(instances, idents []string) ([]Intersections, error) {
 	body, err := json.Marshal(IngestInput{
 		Identifiers: idents,
 	})
@@ -134,10 +117,10 @@ func (v *remoteStore) gather(instances, idents []string) (map[string]struct{}, e
 	}
 
 	var (
-		numInstances = len(instances)
-		indices      = rand.Perm(numInstances)
-		replicated   = 0
-		identifiers  = make(map[string]struct{})
+		numInstances  = len(instances)
+		indices       = rand.Perm(numInstances)
+		replicated    = 0
+		intersections = make([]Intersections, numInstances)
 	)
 	for i := 0; i < numInstances; i++ {
 		var (
@@ -149,15 +132,12 @@ func (v *remoteStore) gather(instances, idents []string) (map[string]struct{}, e
 			continue
 		}
 
-		var input IngestInput
+		var input Intersections
 		if err := json.Unmarshal(resp, &input); err != nil {
 			continue
 		}
 
-		// Remove duplications
-		for _, v := range input.Identifiers {
-			identifiers[v] = struct{}{}
-		}
+		intersections[i] = input
 
 		replicated++
 	}
@@ -166,13 +146,10 @@ func (v *remoteStore) gather(instances, idents []string) (map[string]struct{}, e
 		return nil, errors.Errorf("failed to fully replicate")
 	}
 
-	// Sum internal fifo values
-	if err = v.fifo.Walk(func(id string) error {
-		identifiers[id] = struct{}{}
-		return nil
-	}); err != nil {
-		return nil, err
-	}
+	return intersections, nil
+}
 
-	return identifiers, nil
+type Intersections struct {
+	Union      []string `json:"union"`
+	Difference []string `json:"difference"`
 }

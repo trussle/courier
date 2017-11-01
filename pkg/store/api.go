@@ -109,7 +109,11 @@ func (a *API) handleReplication(w http.ResponseWriter, r *http.Request) {
 
 	// Make sure we collect the document for the result.
 	qr := ReplicationQueryResult{Errors: a.errors, Params: qp}
-	qr.ID, _ = uuid.New(a.rnd)
+	qr.ID, err = uuid.New(a.rnd)
+	if err != nil {
+		a.errors.InternalServerError(w, r, err.Error())
+		return
+	}
 
 	// Finish
 	qr.Duration = time.Since(begin).String()
