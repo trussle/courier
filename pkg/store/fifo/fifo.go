@@ -63,7 +63,7 @@ func (f *FIFO) Remove(key string) bool {
 	return false
 }
 
-// Contains finds out if a key is present in the LRU cache
+// Contains finds out if a key is present in the FIFO cache
 func (f *FIFO) Contains(key string) bool {
 	_, ok := f.cache[key]
 	return ok
@@ -100,7 +100,17 @@ func (f *FIFO) Keys() []string {
 	return res
 }
 
-// Len returns the current length of the LRU cache
+// Len returns the current length of the FIFO cache
 func (f *FIFO) Len() int {
 	return len(f.items)
+}
+
+// Walk over the items with in the cache
+func (f *FIFO) Walk(fn func(string) error) error {
+	for _, v := range f.items {
+		if err := fn(v); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -161,7 +161,7 @@ func (iw *interceptingWriter) WriteHeader(code int) {
 	iw.ResponseWriter.WriteHeader(code)
 }
 
-func ingestIdentifiers(reader io.ReadCloser) ([]uuid.UUID, error) {
+func ingestIdentifiers(reader io.ReadCloser) ([]string, error) {
 	bytes, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, err
@@ -171,12 +171,15 @@ func ingestIdentifiers(reader io.ReadCloser) ([]uuid.UUID, error) {
 		return nil, errors.New("no body content")
 	}
 
-	var input struct {
-		Identifiers []uuid.UUID `json:"idents"`
-	}
+	var input IngestInput
 	if err = json.Unmarshal(bytes, &input); err != nil {
 		return nil, err
 	}
 
 	return input.Identifiers, nil
+}
+
+// IngestInput defines a simple type for marshalling and unmarshalling idents
+type IngestInput struct {
+	Identifiers []string `json:"idents"`
 }

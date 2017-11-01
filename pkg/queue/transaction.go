@@ -1,13 +1,17 @@
 package queue
 
 import (
-	"github.com/trussle/courier/pkg/lru"
 	"github.com/trussle/courier/pkg/models"
 	"github.com/trussle/courier/pkg/uuid"
 )
 
+type idRecord struct {
+	ID     uuid.UUID
+	Record models.Record
+}
+
 type transaction struct {
-	values []lru.KeyValue
+	values []idRecord
 }
 
 // NewTransaction creates a very simplistic models transaction
@@ -16,16 +20,16 @@ func NewTransaction() models.Transaction {
 }
 
 func (t *transaction) Push(id uuid.UUID, record models.Record) error {
-	t.values = append(t.values, lru.KeyValue{
-		Key:   id,
-		Value: record,
+	t.values = append(t.values, idRecord{
+		ID:     id,
+		Record: record,
 	})
 	return nil
 }
 
 func (t *transaction) Walk(fn func(uuid.UUID, models.Record) error) error {
 	for _, v := range t.values {
-		if err := fn(v.Key, v.Value); err != nil {
+		if err := fn(v.ID, v.Record); err != nil {
 			return err
 		}
 	}

@@ -26,10 +26,6 @@ func TestPeerType(t *testing.T) {
 			"store", "store",
 			true,
 		},
-		{"ingest",
-			"ingest", "ingest",
-			true,
-		},
 		{"bad",
 			"bad", "",
 			false,
@@ -253,7 +249,7 @@ func TestPeer(t *testing.T) {
 				Times(1)
 
 			p := NewPeer(members, log.NewNopLogger())
-			got, err := p.Current(PeerTypeIngest)
+			got, err := p.Current(PeerTypeStore)
 
 			if expected, actual := true, err == nil; expected != actual {
 				t.Errorf("expected: %t, actual: %t", expected, actual)
@@ -315,7 +311,7 @@ func (m funcMatcher) Matches(x interface{}) bool {
 	if fn, ok := x.(func(members.PeerInfo) error); ok {
 		for _, v := range m.hosts {
 			if err := fn(members.PeerInfo{
-				Type:    PeerTypeIngest,
+				Type:    PeerTypeStore,
 				APIAddr: v,
 				APIPort: 8080,
 			}); err != nil {

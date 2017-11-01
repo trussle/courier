@@ -20,16 +20,13 @@ const (
 const (
 	// PeerTypeStore serves the store API
 	PeerTypeStore members.PeerType = "store"
-
-	// PeerTypeIngest serves the ingest API
-	PeerTypeIngest = "ingest"
 )
 
 // ParsePeerType parses a potential peer type and errors out if it's not a known
 // valid type.
 func ParsePeerType(t string) (members.PeerType, error) {
 	switch t {
-	case "store", "ingest":
+	case "store":
 		return members.PeerType(t), nil
 	default:
 		return "", errors.Errorf("invalid peer type (%s)", t)
@@ -130,11 +127,7 @@ func (p *peer) State() map[string]interface{} {
 // Current API host:ports for the given type of node.
 func (p *peer) Current(peerType members.PeerType) (res []string, err error) {
 	err = p.members.Walk(func(info members.PeerInfo) error {
-		var (
-			matchIngest = peerType == PeerTypeIngest && info.Type == PeerTypeIngest
-			matchStore  = peerType == PeerTypeStore && info.Type == PeerTypeStore
-		)
-		if matchIngest || matchStore {
+		if peerType == PeerTypeStore && info.Type == PeerTypeStore {
 			res = append(res, net.JoinHostPort(info.APIAddr, strconv.Itoa(info.APIPort)))
 		}
 		return nil

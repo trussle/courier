@@ -20,6 +20,7 @@ import (
 	h "github.com/trussle/courier/pkg/http"
 	"github.com/trussle/courier/pkg/queue"
 	"github.com/trussle/courier/pkg/status"
+	"github.com/trussle/courier/pkg/store"
 	"github.com/trussle/fsys"
 )
 
@@ -283,9 +284,15 @@ func runIngest(args []string) error {
 	{
 		g.Add(func() error {
 			mux := http.NewServeMux()
+			mux.Handle("/store/", http.StripPrefix("/store", store.NewAPI(
+				store,
+				log.With(logger, "component", "store_api"),
+				connectedClients.WithLabelValues("store"),
+				apiDuration,
+			)))
 			mux.Handle("/status/", http.StripPrefix("/status", status.NewAPI(
 				log.With(logger, "component", "status_api"),
-				connectedClients.WithLabelValues("ingest"),
+				connectedClients.WithLabelValues("status"),
 				apiDuration,
 			)))
 
