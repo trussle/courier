@@ -62,8 +62,9 @@ func TestPeerInfo(t *testing.T) {
 	t.Parallel()
 
 	t.Run("encode", func(t *testing.T) {
-		fn := func(peerType, addr string, port int) bool {
+		fn := func(name, peerType, addr string, port int) bool {
 			m := encodePeerInfoTag(PeerInfo{
+				Name:    name,
 				Type:    PeerType(peerType),
 				APIAddr: addr,
 				APIPort: port,
@@ -74,7 +75,8 @@ func TestPeerInfo(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			return m["type"] == peerType &&
+			return m["name"] == name &&
+				m["type"] == peerType &&
 				m["api_addr"] == addr &&
 				p == port
 		}
@@ -85,8 +87,9 @@ func TestPeerInfo(t *testing.T) {
 	})
 
 	t.Run("decode", func(t *testing.T) {
-		fn := func(peerType, addr string, port int) bool {
+		fn := func(name, peerType, addr string, port int) bool {
 			m := encodePeerInfoTag(PeerInfo{
+				Name:    name,
 				Type:    PeerType(peerType),
 				APIAddr: addr,
 				APIPort: port,
@@ -97,7 +100,8 @@ func TestPeerInfo(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			return info.Type.String() == peerType &&
+			return info.Name == name &&
+				info.Type.String() == peerType &&
 				info.APIAddr == addr &&
 				info.APIPort == port
 		}

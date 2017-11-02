@@ -70,7 +70,7 @@ func New(config *Config, logger log.Logger) (log Log, err error) {
 	case "nop":
 		log = newNopLog()
 	default:
-		err = errors.Errorf("unexpected queue type %q", config.name)
+		err = errors.Errorf("unexpected log type %q", config.name)
 	}
 	return
 }

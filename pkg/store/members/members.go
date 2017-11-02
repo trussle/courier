@@ -150,6 +150,7 @@ func WithBroadcastTimeout(d time.Duration) Option {
 
 // PeerInfo describes what each peer is, along with the addr and port of each
 type PeerInfo struct {
+	Name    string
 	Type    PeerType
 	APIAddr string
 	APIPort int
@@ -158,6 +159,7 @@ type PeerInfo struct {
 // encodeTagPeerInfo encodes the peer information for the node tags.
 func encodePeerInfoTag(info PeerInfo) map[string]string {
 	return map[string]string{
+		"name":     info.Name,
 		"type":     string(info.Type),
 		"api_addr": info.APIAddr,
 		"api_port": strconv.Itoa(info.APIPort),
@@ -166,6 +168,13 @@ func encodePeerInfoTag(info PeerInfo) map[string]string {
 
 // decodePeerInfoTag gets the peer information from the node tags.
 func decodePeerInfoTag(m map[string]string) (info PeerInfo, err error) {
+	name, ok := m["name"]
+	if !ok {
+		err = errors.Errorf("missing name")
+		return
+	}
+	info.Name = name
+
 	peerType, ok := m["type"]
 	if !ok {
 		err = errors.Errorf("missing api_addr")

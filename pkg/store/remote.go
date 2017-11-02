@@ -11,6 +11,12 @@ import (
 	"github.com/trussle/courier/pkg/store/cluster"
 )
 
+// RemoteConfig creates a configuration to create a RemoteLog.
+type RemoteConfig struct {
+	ReplicationFactor int
+	Peer              cluster.Peer
+}
+
 type remoteStore struct {
 	local             Store
 	client            *client.Client
@@ -19,12 +25,12 @@ type remoteStore struct {
 	logger            log.Logger
 }
 
-func newRemoteStore(size, replicationFactor int, peer cluster.Peer, logger log.Logger) Store {
+func newRemoteStore(size int, config *RemoteConfig, logger log.Logger) Store {
 	return &remoteStore{
 		local:             newVirtualStore(size),
 		client:            client.NewClient(http.DefaultClient),
-		peer:              peer,
-		replicationFactor: replicationFactor,
+		peer:              config.Peer,
+		replicationFactor: config.ReplicationFactor,
 		logger:            logger,
 	}
 }

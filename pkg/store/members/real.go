@@ -103,6 +103,7 @@ func transformConfig(config Config) *serf.Config {
 	c.LogOutput = config.logOutput
 	c.BroadcastTimeout = config.broadcastTimeout
 	c.Tags = encodePeerInfoTag(PeerInfo{
+		Name:    config.nodeName,
 		Type:    config.peerType,
 		APIAddr: config.bindAddr,
 		APIPort: config.bindPort,
