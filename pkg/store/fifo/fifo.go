@@ -23,7 +23,7 @@ type EvictCallback func(EvictionReason, string)
 type FIFO struct {
 	size    int
 	items   []string
-	cache   map[string]struct{}
+	cache   map[string]int
 	onEvict EvictCallback
 }
 
@@ -32,20 +32,20 @@ func NewFIFO(size int, onEvict EvictCallback) *FIFO {
 	return &FIFO{
 		size:    size,
 		items:   make([]string, 0),
-		cache:   make(map[string]struct{}),
+		cache:   make(map[string]int),
 		onEvict: onEvict,
 	}
 }
 
 // Add adds a key, value pair.
 func (f *FIFO) Add(key string) bool {
-	if len(f.items) >= f.size {
+	if len(f.items) == f.size {
 		if _, ok := f.Pop(); !ok {
 			return false
 		}
 	}
 	f.items = append(f.items, key)
-	f.cache[key] = struct{}{}
+	f.cache[key]++
 	return true
 }
 
@@ -55,7 +55,7 @@ func (f *FIFO) Remove(key string) bool {
 	for k, v := range f.items {
 		if v == key {
 			f.items = append(f.items[:k], f.items[k+1:]...)
-			delete(f.cache, v)
+			f.removeElementFromCache(v)
 			f.onEvict(Removed, v)
 			return true
 		}
@@ -77,7 +77,7 @@ func (f *FIFO) Pop() (string, bool) {
 
 	var k string
 	k, f.items = f.items[0], f.items[1:]
-	delete(f.cache, k)
+	f.removeElementFromCache(k)
 	f.onEvict(Popped, k)
 	return k, true
 }
@@ -88,7 +88,7 @@ func (f *FIFO) Purge() {
 		f.onEvict(Purged, v)
 	}
 	f.items = f.items[:0]
-	f.cache = make(map[string]struct{})
+	f.cache = make(map[string]int)
 }
 
 // Keys returns the keys as a slice
@@ -113,4 +113,11 @@ func (f *FIFO) Walk(fn func(string) error) error {
 		}
 	}
 	return nil
+}
+
+func (f *FIFO) removeElementFromCache(k string) {
+	f.cache[k]--
+	if f.cache[k] == 0 {
+		delete(f.cache, k)
+	}
 }

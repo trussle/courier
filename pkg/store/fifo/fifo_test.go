@@ -107,6 +107,37 @@ func TestFIFO_Add(t *testing.T) {
 			t.Error(err)
 		}
 	})
+
+	t.Run("adding multiple times with cap", func(t *testing.T) {
+		fn := func(ids []ASCII) bool {
+			cap := len(ids) / 2
+			if cap < 1 {
+				return true
+			}
+
+			onEviction := func(reason fifo.EvictionReason, k string) {}
+
+			l := fifo.NewFIFO(cap, onEviction)
+
+			for _, v := range ids {
+				l.Add(v.String())
+			}
+
+			if (len(ids) % 2) == 1 {
+				cap++
+			}
+
+			values := unwrapASCII(ids[cap:])
+			if expected, actual := values, l.Keys(); !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected: %v, actual: %v", expected, actual)
+			}
+
+			return true
+		}
+		if err := quick.Check(fn, nil); err != nil {
+			t.Error(err)
+		}
+	})
 }
 
 func TestFIFO_Contains(t *testing.T) {
@@ -139,6 +170,12 @@ func TestFIFO_Contains(t *testing.T) {
 
 	t.Run("does not contains", func(t *testing.T) {
 		fn := func(id0, id1, id2, id3 ASCII) bool {
+			if id0.String() == id3.String() ||
+				id1.String() == id3.String() ||
+				id2.String() == id3.String() {
+				return true
+			}
+
 			onEviction := func(reason fifo.EvictionReason, k string) {
 				t.Fatal("failed if called")
 			}
@@ -159,6 +196,39 @@ func TestFIFO_Contains(t *testing.T) {
 		}
 		if err := quick.Check(fn, nil); err != nil {
 			t.Error(err)
+		}
+	})
+
+	t.Run("contain duplicates", func(t *testing.T) {
+		onEviction := func(reason fifo.EvictionReason, k string) {}
+
+		l := fifo.NewFIFO(2, onEviction)
+
+		l.Add("a")
+		l.Add("a")
+		l.Add("b")
+
+		ok := l.Contains("a")
+
+		if expected, actual := true, ok; expected != actual {
+			t.Errorf("expected: %t, actual: %t", expected, actual)
+		}
+	})
+
+	t.Run("does not contain duplicates", func(t *testing.T) {
+		onEviction := func(reason fifo.EvictionReason, k string) {}
+
+		l := fifo.NewFIFO(2, onEviction)
+
+		l.Add("a")
+		l.Add("a")
+		l.Add("b")
+		l.Add("c")
+
+		ok := l.Contains("a")
+
+		if expected, actual := false, ok; expected != actual {
+			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
 	})
 }
@@ -380,7 +450,7 @@ type ASCII []byte
 func (ASCII) Generate(r *rand.Rand, size int) reflect.Value {
 	var (
 		chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-		res   = make([]byte, size+1)
+		res   = make([]byte, 1)
 	)
 
 	for k := range res {
@@ -396,4 +466,12 @@ func (a ASCII) Slice() []byte {
 
 func (a ASCII) String() string {
 	return string(a)
+}
+
+func unwrapASCII(a []ASCII) []string {
+	res := make([]string, len(a))
+	for k, v := range a {
+		res[k] = v.String()
+	}
+	return res
 }

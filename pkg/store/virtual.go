@@ -16,22 +16,42 @@ func newVirtualStore(size int) Store {
 
 func (v *virtualStore) Add(idents []string) error {
 	for _, ident := range idents {
-		v.fifo.Add(ident)
+		if !v.fifo.Contains(ident) {
+			v.fifo.Add(ident)
+		}
 	}
 	return nil
 }
 
-func (v *virtualStore) Intersection(idents []string) (union, difference []string, err error) {
-	for _, ident := range idents {
+func (v *virtualStore) Intersection(idents []string) ([]string, []string, error) {
+	var (
+		union      = make([]string, 0)
+		difference = make([]string, 0)
+	)
+
+	for _, ident := range unique(idents) {
 		if v.fifo.Contains(ident) {
 			union = append(union, ident)
 		} else {
 			difference = append(difference, ident)
 		}
 	}
-	return
+	return union, difference, nil
 }
 
 func (v *virtualStore) onElementEviction(reason fifo.EvictionReason, key string) {
 	// do nothing
+}
+
+func unique(a []string) []string {
+	unique := make(map[string]struct{})
+	for _, k := range a {
+		unique[k] = struct{}{}
+	}
+
+	res := make([]string, 0)
+	for k := range unique {
+		res = append(res, k)
+	}
+	return res
 }
