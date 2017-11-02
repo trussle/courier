@@ -77,15 +77,17 @@ func (qr *IntersectionQueryResult) EncodeTo(w http.ResponseWriter) {
 	w.Header().Set(httpHeaderContentType, defaultContentType)
 	w.Header().Set(httpHeaderDuration, qr.Duration)
 
-	if err := json.NewEncoder(w).Encode(struct {
-		Union      []string `json:"union"`
-		Difference []string `json:"difference"`
-	}{
+	if err := json.NewEncoder(w).Encode(Intersections{
 		Union:      qr.Union,
 		Difference: qr.Difference,
 	}); err != nil {
 		qr.Errors.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+type Intersections struct {
+	Union      []string `json:"union"`
+	Difference []string `json:"difference"`
 }
 
 const (

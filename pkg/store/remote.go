@@ -12,6 +12,7 @@ import (
 )
 
 type remoteStore struct {
+	local             Store
 	client            *client.Client
 	peer              cluster.Peer
 	replicationFactor int
@@ -20,6 +21,7 @@ type remoteStore struct {
 
 func newRemoteStore(size, replicationFactor int, peer cluster.Peer, logger log.Logger) Store {
 	return &remoteStore{
+		local:             newVirtualStore(size),
 		client:            client.NewClient(http.DefaultClient),
 		peer:              peer,
 		replicationFactor: replicationFactor,
@@ -33,10 +35,23 @@ func (v *remoteStore) Add(idents []string) error {
 		return err
 	}
 
-	return v.replicate(instances, idents)
+	if err := v.replicate(instances, idents); err != nil {
+		return err
+	}
+
+	return v.local.Add(idents)
 }
 
+// union = matched
+// difference = not matched
 func (v *remoteStore) Intersection(idents []string) (union, difference []string, err error) {
+	// Check typical exit clause.
+	var localUnion, localDifference []string
+	localUnion, localDifference, err = v.local.Intersection(idents)
+	if len(filter(idents, localUnion)) == len(idents) {
+		return
+	}
+
 	var instances []string
 	instances, err = v.storeInstances()
 	if err != nil {
@@ -49,10 +64,33 @@ func (v *remoteStore) Intersection(idents []string) (union, difference []string,
 		return
 	}
 
+	// Include local
+	intersections = append(intersections, Intersections{
+		Union:      localUnion,
+		Difference: localDifference,
+	})
+
 	// Sum intersections
+	var (
+		uni  = map[string]struct{}{}
+		diff = map[string]struct{}{}
+	)
 	for _, v := range intersections {
-		union = append(union, v.Union...)
-		difference = append(difference, v.Difference...)
+		for _, s := range filter(idents, v.Union) {
+			uni[s] = struct{}{}
+		}
+		for _, s := range filter(idents, v.Difference) {
+			diff[s] = struct{}{}
+		}
+	}
+
+	for k := range uni {
+		union = append(union, k)
+	}
+	for k := range diff {
+		if _, ok := uni[k]; !ok {
+			difference = append(difference, k)
+		}
 	}
 
 	return
@@ -149,7 +187,13 @@ func (v *remoteStore) gather(instances, idents []string) ([]Intersections, error
 	return intersections, nil
 }
 
-type Intersections struct {
-	Union      []string `json:"union"`
-	Difference []string `json:"difference"`
+func filter(h []string, v []string) (res []string) {
+	for _, a := range v {
+		for _, b := range h {
+			if a == b {
+				res = append(res, b)
+			}
+		}
+	}
+	return
 }
