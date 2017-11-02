@@ -23,7 +23,7 @@ const (
 	APIPathReplication = "/replicate"
 
 	// APIPathIntersection represents a way to find out what records intersect.
-	APIPathIntersection = "/intersects"
+	APIPathIntersection = "/intersect"
 )
 
 // API serves the store API
