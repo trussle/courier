@@ -203,3 +203,35 @@ func filter(h []string, v []string) (res []string) {
 	}
 	return
 }
+
+// ConfigOption defines a option for generating a RemoteConfig
+type ConfigOption func(*RemoteConfig) error
+
+// BuildConfig ingests configuration options to then yield a
+// RemoteConfig, and return an error if it fails during configuring.
+func BuildConfig(opts ...ConfigOption) (*RemoteConfig, error) {
+	var config RemoteConfig
+	for _, opt := range opts {
+		err := opt(&config)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &config, nil
+}
+
+// WithPeer adds an Peer option to the configuration
+func WithPeer(peer cluster.Peer) ConfigOption {
+	return func(config *RemoteConfig) error {
+		config.Peer = peer
+		return nil
+	}
+}
+
+// WithReplicationFactor adds an ReplicationFactor option to the configuration
+func WithReplicationFactor(factor int) ConfigOption {
+	return func(config *RemoteConfig) error {
+		config.ReplicationFactor = factor
+		return nil
+	}
+}

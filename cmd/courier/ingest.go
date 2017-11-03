@@ -13,6 +13,7 @@ import (
 	"github.com/SimonRichardson/gexec"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/trussle/courier/pkg/audit"
@@ -21,6 +22,8 @@ import (
 	"github.com/trussle/courier/pkg/queue"
 	"github.com/trussle/courier/pkg/status"
 	"github.com/trussle/courier/pkg/store"
+	"github.com/trussle/courier/pkg/store/cluster"
+	"github.com/trussle/courier/pkg/store/members"
 	"github.com/trussle/fsys"
 )
 
@@ -29,6 +32,10 @@ const (
 	defaultAuditLog         = "nop"
 	defaultAuditLogRootPath = "bin"
 	defaultFilesystem       = "nop"
+
+	defaultStore             = "nop"
+	defaultStoreSize         = 1000
+	defaultReplicationFactor = 2
 
 	defaultAWSID     = ""
 	defaultAWSSecret = ""
@@ -65,6 +72,10 @@ func runIngest(args []string) error {
 		auditLogType     = flags.String("auditlog", defaultAuditLog, "type of audit log to use (remote, local, nop)")
 		auditLogRootPath = flags.String("auditlog.path", defaultAuditLogRootPath, "audit log root directory for the filesystem to use")
 		filesystemType   = flags.String("filesystem", defaultFilesystem, "type of filesystem backing (local, virtual, nop)")
+
+		storeType              = flags.String("store", defaultStore, "type of temporary store to use (remote, virtual, nop)")
+		storeSize              = flags.Int("store.size", defaultStoreSize, "number items the store should hold")
+		storeReplicationFactor = flags.Int("store.replication.factor", defaultReplicationFactor, "replication factor for remote configuration")
 
 		recipientURL = flags.String("recipient.url", defaultRecipientURL, "URL to hit with the message payload")
 		numConsumers = flags.Int("num.consumers", defaultNumConsumers, "number of consumers to run at once")
@@ -226,6 +237,42 @@ func runIngest(args []string) error {
 		return errors.Wrap(err, "queue config")
 	}
 
+	// Configuration for the store
+	storeMembersConfig, err := members.Build(
+		members.WithPeerType(cluster.PeerTypeStore),
+		members.WithNodeName(uuid.New()),
+		members.WithLogOutput(membersLogOutput{
+			logger: log.With(logger, "component", "cluster"),
+		}),
+	)
+	if err != nil {
+		return errors.Wrap(err, "members remote config")
+	}
+
+	storeMembers, err := members.NewRealMembers(storeMembersConfig, log.With(logger, "component", "members"))
+	if err != nil {
+		return errors.Wrap(err, "members remote")
+	}
+
+	storeRemoteConfig, err := store.BuildConfig(
+		store.WithReplicationFactor(*storeReplicationFactor),
+		store.WithPeer(cluster.NewPeer(storeMembers, log.With(logger, "component", "peer"))),
+	)
+	if err != nil {
+		return errors.Wrap(err, "store remote config")
+	}
+
+	storeConfig, err := store.Build(
+		store.With(*storeType),
+		store.WithSize(*storeSize),
+		store.WithRemoteConfig(storeRemoteConfig),
+	)
+
+	cache, err := store.New(storeConfig, log.With(logger, "component", "store"))
+	if err != nil {
+		return errors.Wrap(err, "store")
+	}
+
 	// Execution group.
 	g := gexec.NewGroup()
 	gexec.Block(g)
@@ -265,6 +312,7 @@ func runIngest(args []string) error {
 				h.NewClient(timeoutClient, *recipientURL),
 				consumerQueue,
 				consumerLog,
+				cache,
 				consumedSegments,
 				consumedRecords,
 				replicatedSegments,
@@ -285,7 +333,7 @@ func runIngest(args []string) error {
 		g.Add(func() error {
 			mux := http.NewServeMux()
 			mux.Handle("/store/", http.StripPrefix("/store", store.NewAPI(
-				store,
+				cache,
 				log.With(logger, "component", "store_api"),
 				connectedClients.WithLabelValues("store"),
 				apiDuration,
@@ -306,4 +354,13 @@ func runIngest(args []string) error {
 	}
 	gexec.Interrupt(g)
 	return g.Run()
+}
+
+type membersLogOutput struct {
+	logger log.Logger
+}
+
+func (m membersLogOutput) Write(b []byte) (int, error) {
+	level.Debug(m.logger).Log("fwd_msg", string(b))
+	return len(b), nil
 }

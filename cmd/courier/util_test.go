@@ -36,21 +36,3 @@ func TestParseAddr(t *testing.T) {
 		}
 	}
 }
-
-func TestEnvName(t *testing.T) {
-	for _, testcase := range []struct {
-		value string
-		want  string
-	}{
-		{"name", "NAME"},
-		{"name.subname", "NAME_SUBNAME"},
-		{"name..SubName", "NAME__SUBNAME"},
-		{".NAmE.", "_NAME_"},
-	} {
-		t.Run(testcase.value, func(t *testing.T) {
-			if expected, actual := testcase.want, envName(testcase.value); expected != actual {
-				t.Errorf("expected: %s, actual: %s", expected, actual)
-			}
-		})
-	}
-}
