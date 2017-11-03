@@ -6,11 +6,11 @@ type nopMembers struct {
 // NewNopMembers creates a new members list to join.
 func NewNopMembers() Members { return nopMembers{} }
 
-func (r nopMembers) Join() (int, error)                 { return 0, nil }
-func (r nopMembers) Leave() error                       { return nil }
-func (r nopMembers) MemberList() MemberList             { return nopMemberList{} }
-func (r nopMembers) Walk(fn func(PeerInfo) error) error { return nil }
-func (r nopMembers) Close() error                       { return nil }
+func (r nopMembers) Join() (int, error)              { return 0, nil }
+func (r nopMembers) Leave() error                    { return nil }
+func (r nopMembers) MemberList() MemberList          { return nopMemberList{} }
+func (r nopMembers) Walk(func(PeerInfo) error) error { return nil }
+func (r nopMembers) Close() error                    { return nil }
 
 type nopMemberList struct{}
 
