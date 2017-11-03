@@ -1,11 +1,12 @@
 package store
 
 import (
-	"math/rand"
 	"reflect"
 	"sort"
 	"testing"
 	"testing/quick"
+
+	"github.com/trussle/harness/generators"
 )
 
 func TestVirtual(t *testing.T) {
@@ -40,8 +41,8 @@ func TestVirtual(t *testing.T) {
 	})
 
 	t.Run("intersection", func(t *testing.T) {
-		fn := func(a []ASCII) bool {
-			idents := unwrapASCII(a)
+		fn := func(a generators.ASCIISlice) bool {
+			idents := a.Slice()
 			store := newVirtualStore(len(idents))
 			if err := store.Add(idents); err != nil {
 				t.Fatal(err)
@@ -131,39 +132,6 @@ func TestVirtual(t *testing.T) {
 			t.Errorf("expected: %v, actual: %v", expected, actual)
 		}
 	})
-}
-
-// ASCII creates a series of tags that are ascii compliant.
-type ASCII []byte
-
-// Generate allows ASCII to be used within quickcheck scenarios.
-func (ASCII) Generate(r *rand.Rand, size int) reflect.Value {
-	var (
-		chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-		res   = make([]byte, 1)
-	)
-
-	for k := range res {
-		res[k] = byte(chars[r.Intn(len(chars)-1)])
-	}
-
-	return reflect.ValueOf(res)
-}
-
-func (a ASCII) Slice() []byte {
-	return a
-}
-
-func (a ASCII) String() string {
-	return string(a)
-}
-
-func unwrapASCII(a []ASCII) []string {
-	res := make([]string, len(a))
-	for k, v := range a {
-		res[k] = v.String()
-	}
-	return res
 }
 
 func match(a, b []string) bool {

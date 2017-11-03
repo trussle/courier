@@ -26,6 +26,7 @@ import:
   - package: github.com/hashicorp/serf
   - package: github.com/gorilla/mux
   - package: github.com/trussle/fsys
+  - package: github.com/trussle/harness
   - package: github.com/aws/aws-sdk-go
     subpackages:
     - aws

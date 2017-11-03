@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"fmt"
-	"math/rand"
 	"reflect"
 	"testing"
 	"testing/quick"
@@ -12,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/trussle/courier/pkg/store/members"
 	"github.com/trussle/courier/pkg/store/members/mocks"
+	"github.com/trussle/harness/generators"
 )
 
 func TestPeerType(t *testing.T) {
@@ -236,11 +236,11 @@ func TestPeer(t *testing.T) {
 	})
 
 	t.Run("current", func(t *testing.T) {
-		fn := func(hosts []ASCII) bool {
+		fn := func(hosts generators.ASCIISlice) bool {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			hostStrings := unwrapASCII(hosts)
+			hostStrings := hosts.Slice()
 
 			members := mocks.NewMockMembers(ctrl)
 			members.EXPECT().
@@ -268,39 +268,6 @@ func TestPeer(t *testing.T) {
 			t.Error(err)
 		}
 	})
-}
-
-// ASCII creates a series of tags that are ascii compliant.
-type ASCII []byte
-
-// Generate allows ASCII to be used within quickcheck scenarios.
-func (ASCII) Generate(r *rand.Rand, size int) reflect.Value {
-	var (
-		chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-		res   = make([]byte, size)
-	)
-
-	for k := range res {
-		res[k] = byte(chars[r.Intn(len(chars)-1)])
-	}
-
-	return reflect.ValueOf(res)
-}
-
-func (a ASCII) Slice() []byte {
-	return a
-}
-
-func (a ASCII) String() string {
-	return string(a)
-}
-
-func unwrapASCII(a []ASCII) []string {
-	res := make([]string, len(a))
-	for k, v := range a {
-		res[k] = v.String()
-	}
-	return res
 }
 
 type funcMatcher struct {

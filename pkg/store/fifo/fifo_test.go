@@ -1,19 +1,19 @@
 package fifo_test
 
 import (
-	"math/rand"
 	"reflect"
 	"testing"
 	"testing/quick"
 
 	"github.com/trussle/courier/pkg/store/fifo"
+	"github.com/trussle/harness/generators"
 )
 
 func TestFIFO_Add(t *testing.T) {
 	t.Parallel()
 
 	t.Run("adding with eviction", func(t *testing.T) {
-		fn := func(id0, id1 ASCII) bool {
+		fn := func(id0, id1 generators.ASCII) bool {
 			onEviction := func(reason fifo.EvictionReason, k string) {
 				t.Fatal("failed if called")
 			}
@@ -46,7 +46,7 @@ func TestFIFO_Add(t *testing.T) {
 	})
 
 	t.Run("adding sorts keys", func(t *testing.T) {
-		fn := func(id0, id1, id2 ASCII) bool {
+		fn := func(id0, id1, id2 generators.ASCII) bool {
 			onEviction := func(reason fifo.EvictionReason, k string) {
 				t.Fatal("failed if called")
 			}
@@ -77,7 +77,7 @@ func TestFIFO_Add(t *testing.T) {
 	})
 
 	t.Run("adding with size", func(t *testing.T) {
-		fn := func(id0, id1, id2, id3 ASCII) bool {
+		fn := func(id0, id1, id2, id3 generators.ASCII) bool {
 			onEviction := func(reason fifo.EvictionReason, k string) {
 				if expected, actual := id0.String(), k; expected != actual {
 					t.Errorf("expected: %v, actual: %v", expected, actual)
@@ -109,7 +109,8 @@ func TestFIFO_Add(t *testing.T) {
 	})
 
 	t.Run("adding multiple times with cap", func(t *testing.T) {
-		fn := func(ids []ASCII) bool {
+		fn := func(a generators.ASCIISlice) bool {
+			ids := a.Slice()
 			cap := len(ids) / 2
 			if cap < 1 {
 				return true
@@ -120,14 +121,14 @@ func TestFIFO_Add(t *testing.T) {
 			l := fifo.NewFIFO(cap, onEviction)
 
 			for _, v := range ids {
-				l.Add(v.String())
+				l.Add(v)
 			}
 
 			if (len(ids) % 2) == 1 {
 				cap++
 			}
 
-			values := unwrapASCII(ids[cap:])
+			values := ids[cap:]
 			if expected, actual := values, l.Keys(); !reflect.DeepEqual(expected, actual) {
 				t.Errorf("expected: %v, actual: %v", expected, actual)
 			}
@@ -144,7 +145,7 @@ func TestFIFO_Contains(t *testing.T) {
 	t.Parallel()
 
 	t.Run("contains", func(t *testing.T) {
-		fn := func(id0, id1, id2 ASCII) bool {
+		fn := func(id0, id1, id2 generators.ASCII) bool {
 			onEviction := func(reason fifo.EvictionReason, k string) {
 				t.Fatal("failed if called")
 			}
@@ -169,7 +170,7 @@ func TestFIFO_Contains(t *testing.T) {
 	})
 
 	t.Run("does not contains", func(t *testing.T) {
-		fn := func(id0, id1, id2, id3 ASCII) bool {
+		fn := func(id0, id1, id2, id3 generators.ASCII) bool {
 			if id0.String() == id3.String() ||
 				id1.String() == id3.String() ||
 				id2.String() == id3.String() {
@@ -237,7 +238,7 @@ func TestFIFO_Remove(t *testing.T) {
 	t.Parallel()
 
 	t.Run("removes key value pair", func(t *testing.T) {
-		fn := func(id0, id1, id2 ASCII) bool {
+		fn := func(id0, id1, id2 generators.ASCII) bool {
 			evictted := 0
 			onEviction := func(reason fifo.EvictionReason, k string) {
 				if expected, actual := id0.String(), k; expected != actual {
@@ -293,7 +294,7 @@ func TestFIFO_Pop(t *testing.T) {
 	})
 
 	t.Run("pop", func(t *testing.T) {
-		fn := func(id0, id1, id2 ASCII) bool {
+		fn := func(id0, id1, id2 generators.ASCII) bool {
 			evictted := 0
 			onEviction := func(reason fifo.EvictionReason, k string) {
 				if expected, actual := id0.String(), k; expected != actual {
@@ -330,7 +331,7 @@ func TestFIFO_Pop(t *testing.T) {
 	})
 
 	t.Run("pop results", func(t *testing.T) {
-		fn := func(id0, id1, id2 ASCII) bool {
+		fn := func(id0, id1, id2 generators.ASCII) bool {
 			evictted := 0
 			onEviction := func(reason fifo.EvictionReason, k string) {
 				if expected, actual := id0.String(), k; expected != actual {
@@ -372,7 +373,7 @@ func TestFIFO_Purge(t *testing.T) {
 	t.Parallel()
 
 	t.Run("purge", func(t *testing.T) {
-		fn := func(id0, id1, id2 ASCII) bool {
+		fn := func(id0, id1, id2 generators.ASCII) bool {
 			evictted := 0
 			onEviction := func(reason fifo.EvictionReason, k string) {
 				evictted += 1
@@ -414,7 +415,7 @@ func TestFIFO_Keys(t *testing.T) {
 	t.Parallel()
 
 	t.Run("keys", func(t *testing.T) {
-		fn := func(id0, id1, id2 ASCII) bool {
+		fn := func(id0, id1, id2 generators.ASCII) bool {
 			onEviction := func(reason fifo.EvictionReason, k string) {
 				t.Fatal("failed if called")
 			}
@@ -441,37 +442,4 @@ func TestFIFO_Keys(t *testing.T) {
 			t.Error(err)
 		}
 	})
-}
-
-// ASCII creates a series of tags that are ascii compliant.
-type ASCII []byte
-
-// Generate allows ASCII to be used within quickcheck scenarios.
-func (ASCII) Generate(r *rand.Rand, size int) reflect.Value {
-	var (
-		chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-		res   = make([]byte, 1)
-	)
-
-	for k := range res {
-		res[k] = byte(chars[r.Intn(len(chars)-1)])
-	}
-
-	return reflect.ValueOf(res)
-}
-
-func (a ASCII) Slice() []byte {
-	return a
-}
-
-func (a ASCII) String() string {
-	return string(a)
-}
-
-func unwrapASCII(a []ASCII) []string {
-	res := make([]string, len(a))
-	for k, v := range a {
-		res[k] = v.String()
-	}
-	return res
 }

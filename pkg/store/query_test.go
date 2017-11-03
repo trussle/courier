@@ -12,13 +12,14 @@ import (
 	"github.com/go-kit/kit/log"
 	errs "github.com/trussle/courier/pkg/http"
 	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/harness/generators"
 )
 
 func TestReplicationQueryParams(t *testing.T) {
 	t.Parallel()
 
 	t.Run("DecodeFrom with invalid content-type", func(t *testing.T) {
-		fn := func(uid uuid.UUID, contentType ASCII) bool {
+		fn := func(uid uuid.UUID, contentType generators.ASCII) bool {
 			var (
 				qp ReplicationQueryParams
 
@@ -229,7 +230,7 @@ func TestIntersectionQueryParams(t *testing.T) {
 	t.Parallel()
 
 	t.Run("DecodeFrom with invalid content-type", func(t *testing.T) {
-		fn := func(uid uuid.UUID, contentType ASCII) bool {
+		fn := func(uid uuid.UUID, contentType generators.ASCII) bool {
 			var (
 				qp IntersectionQueryParams
 
