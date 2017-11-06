@@ -16,12 +16,14 @@ import (
 var version = "dev"
 
 const (
-	defaultAPIPort = 8080
-	defaultAddr    = "0.0.0.0:0"
+	defaultAPIPort     = 8080
+	defaultClusterPort = 8079
+	defaultAddr        = "0.0.0.0:0"
 )
 
 var (
-	defaultAPIAddr = fmt.Sprintf("tcp://0.0.0.0:%d", defaultAPIPort)
+	defaultAPIAddr     = fmt.Sprintf("tcp://0.0.0.0:%d", defaultAPIPort)
+	defaultClusterAddr = fmt.Sprintf("tcp://0.0.0.0:%d", defaultClusterPort)
 )
 
 type command func([]string) error

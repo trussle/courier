@@ -60,32 +60,29 @@ func runIngest(args []string) error {
 		debug   = flags.Bool("debug", false, "debug logging")
 		apiAddr = flags.String("api", defaultAPIAddr, "listen address for ingest API")
 
-		awsID     = flags.String("aws.id", defaultAWSID, "AWS configuration id")
-		awsSecret = flags.String("aws.secret", defaultAWSSecret, "AWS configuration secret")
-		awsToken  = flags.String("aws.token", defaultAWSToken, "AWS configuration token")
-		awsRegion = flags.String("aws.region", defaultAWSRegion, "AWS configuration region")
-
-		awsSQSQueue       = flags.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
-		awsFirehoseStream = flags.String("aws.firehose.stream", defaultAWSFirehoseStream, "AWS configuration stream")
-
-		queueType        = flags.String("queue", defaultQueue, "type of queue to use (remote, virtual, nop)")
-		auditLogType     = flags.String("auditlog", defaultAuditLog, "type of audit log to use (remote, local, nop)")
-		auditLogRootPath = flags.String("auditlog.path", defaultAuditLogRootPath, "audit log root directory for the filesystem to use")
-		filesystemType   = flags.String("filesystem", defaultFilesystem, "type of filesystem backing (local, virtual, nop)")
-
+		awsID                  = flags.String("aws.id", defaultAWSID, "AWS configuration id")
+		awsSecret              = flags.String("aws.secret", defaultAWSSecret, "AWS configuration secret")
+		awsToken               = flags.String("aws.token", defaultAWSToken, "AWS configuration token")
+		awsRegion              = flags.String("aws.region", defaultAWSRegion, "AWS configuration region")
+		awsSQSQueue            = flags.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
+		awsFirehoseStream      = flags.String("aws.firehose.stream", defaultAWSFirehoseStream, "AWS configuration stream")
+		queueType              = flags.String("queue", defaultQueue, "type of queue to use (remote, virtual, nop)")
+		auditLogType           = flags.String("auditlog", defaultAuditLog, "type of audit log to use (remote, local, nop)")
+		auditLogRootPath       = flags.String("auditlog.path", defaultAuditLogRootPath, "audit log root directory for the filesystem to use")
+		filesystemType         = flags.String("filesystem", defaultFilesystem, "type of filesystem backing (local, virtual, nop)")
 		storeType              = flags.String("store", defaultStore, "type of temporary store to use (remote, virtual, nop)")
 		storeSize              = flags.Int("store.size", defaultStoreSize, "number items the store should hold")
 		storeReplicationFactor = flags.Int("store.replication.factor", defaultReplicationFactor, "replication factor for remote configuration")
-
-		recipientURL = flags.String("recipient.url", defaultRecipientURL, "URL to hit with the message payload")
-		numConsumers = flags.Int("num.consumers", defaultNumConsumers, "number of consumers to run at once")
-
-		maxNumberOfMessages = flags.Int("max.messages", defaultMaxNumberOfMessages, "max number of messages to dequeue at once")
-		visibilityTimeout   = flags.String("visibility.timeout", defaultVisibilityTimeout, "how long the visibility of a message should extended by in seconds")
-
-		metricsRegistration = flags.Bool("metrics.registration", defaultMetricsRegistration, "Registration of metrics on launch")
+		recipientURL           = flags.String("recipient.url", defaultRecipientURL, "URL to hit with the message payload")
+		numConsumers           = flags.Int("num.consumers", defaultNumConsumers, "number of consumers to run at once")
+		maxNumberOfMessages    = flags.Int("max.messages", defaultMaxNumberOfMessages, "max number of messages to dequeue at once")
+		visibilityTimeout      = flags.String("visibility.timeout", defaultVisibilityTimeout, "how long the visibility of a message should extended by in seconds")
+		metricsRegistration    = flags.Bool("metrics.registration", defaultMetricsRegistration, "Registration of metrics on launch")
+		clusterBindAddr        = flags.String("cluster", defaultClusterAddr, "listen address for cluster")
+		clusterAdvertiseAddr   = flags.String("cluster.advertise-addr", "", "optional, explicit address to advertise in cluster")
+		clusterPeers           = stringslice{}
 	)
-
+	flags.Var(&clusterPeers, "peer", "cluster peer host:port (repeatable)")
 	flags.Usage = usageFor(flags, "ingest [flags]")
 	if err := flags.Parse(args); err != nil {
 		return nil
@@ -238,37 +235,15 @@ func runIngest(args []string) error {
 	}
 
 	// Configuration for the store
-	storeMembersConfig, err := members.Build(
-		members.WithPeerType(cluster.PeerTypeStore),
-		members.WithNodeName(uuid.New()),
-		members.WithLogOutput(membersLogOutput{
-			logger: log.With(logger, "component", "cluster"),
-		}),
+	cache, err := configureStore(
+		logger,
+		*storeType,
+		*storeSize,
+		*storeReplicationFactor,
+		*clusterBindAddr,
+		*clusterAdvertiseAddr,
+		clusterPeers.Slice(),
 	)
-	if err != nil {
-		return errors.Wrap(err, "members remote config")
-	}
-
-	storeMembers, err := members.NewRealMembers(storeMembersConfig, log.With(logger, "component", "members"))
-	if err != nil {
-		return errors.Wrap(err, "members remote")
-	}
-
-	storeRemoteConfig, err := store.BuildConfig(
-		store.WithReplicationFactor(*storeReplicationFactor),
-		store.WithPeer(cluster.NewPeer(storeMembers, log.With(logger, "component", "peer"))),
-	)
-	if err != nil {
-		return errors.Wrap(err, "store remote config")
-	}
-
-	storeConfig, err := store.Build(
-		store.With(*storeType),
-		store.WithSize(*storeSize),
-		store.WithRemoteConfig(storeRemoteConfig),
-	)
-
-	cache, err := store.New(storeConfig, log.With(logger, "component", "store"))
 	if err != nil {
 		return errors.Wrap(err, "store")
 	}
@@ -363,4 +338,73 @@ type membersLogOutput struct {
 func (m membersLogOutput) Write(b []byte) (int, error) {
 	level.Debug(m.logger).Log("fwd_msg", string(b))
 	return len(b), nil
+}
+
+func configureStore(logger log.Logger,
+	storeType string,
+	size, replicationFactor int,
+	bindAddr, advertiseAddr string,
+	peers []string,
+) (store.Store, error) {
+
+	clusterBindHost, clusterBindPort, err := parseClusterAddr(bindAddr, defaultClusterPort)
+	if err != nil {
+		return nil, err
+	}
+	level.Info(logger).Log("cluster_bind", fmt.Sprintf("%s:%d", clusterBindHost, clusterBindPort))
+
+	var (
+		clusterAdvertiseHost string
+		clusterAdvertisePort int
+	)
+	if advertiseAddr != "" {
+		clusterAdvertiseHost, clusterAdvertisePort, err = parseClusterAddr(advertiseAddr, defaultClusterPort)
+		if err != nil {
+			return nil, err
+		}
+		level.Info(logger).Log("cluster_advertise", fmt.Sprintf("%s:%d", clusterAdvertiseHost, clusterAdvertisePort))
+	}
+
+	// Safety warning.
+	if addr, err := cluster.CalculateAdvertiseAddress(clusterBindHost, clusterAdvertiseHost); err != nil {
+		level.Warn(logger).Log("err", "couldn't deduce an advertise address: "+err.Error())
+	} else if hasNonlocal(peers) && isUnroutable(addr.String()) {
+		level.Warn(logger).Log("err", "this node advertises itself on an unroutable address", "addr", addr.String())
+		level.Warn(logger).Log("err", "this node will be unreachable in the cluster")
+		level.Warn(logger).Log("err", "provide -cluster.advertise-addr as a routable IP address or hostname")
+	}
+
+	storeMembersConfig, err := members.Build(
+		members.WithPeerType(cluster.PeerTypeStore),
+		members.WithNodeName(uuid.New()),
+		members.WithBindAddrPort(clusterBindHost, clusterAdvertisePort),
+		members.WithAdvertiseAddrPort(clusterAdvertiseHost, clusterAdvertisePort),
+		members.WithLogOutput(membersLogOutput{
+			logger: log.With(logger, "component", "cluster"),
+		}),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "members remote config")
+	}
+
+	storeMembers, err := members.NewRealMembers(storeMembersConfig, log.With(logger, "component", "members"))
+	if err != nil {
+		return nil, errors.Wrap(err, "members remote")
+	}
+
+	storeRemoteConfig, err := store.BuildConfig(
+		store.WithReplicationFactor(replicationFactor),
+		store.WithPeer(cluster.NewPeer(storeMembers, log.With(logger, "component", "peer"))),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "store remote config")
+	}
+
+	storeConfig, err := store.Build(
+		store.With(storeType),
+		store.WithSize(size),
+		store.WithRemoteConfig(storeRemoteConfig),
+	)
+
+	return store.New(storeConfig, log.With(logger, "component", "store"))
 }
