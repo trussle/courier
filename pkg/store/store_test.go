@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
+	"github.com/trussle/harness/generators"
 )
 
 func TestBuildingStore(t *testing.T) {
@@ -58,6 +59,26 @@ func TestNew(t *testing.T) {
 
 		_, err = New(config, log.NewNopLogger())
 		if err != nil {
+			t.Error(err)
+		}
+	})
+}
+
+func TestRequiresRemoteConfig(t *testing.T) {
+	t.Parallel()
+
+	t.Run("remote", func(t *testing.T) {
+		got := RequiresRemoteConfig("remote")
+		if expected, actual := true, got; expected != actual {
+			t.Errorf("expected: %t, actual: %t", expected, actual)
+		}
+	})
+
+	t.Run("any", func(t *testing.T) {
+		fn := func(name generators.ASCII) bool {
+			return !RequiresRemoteConfig(name.String())
+		}
+		if err := quick.Check(fn, nil); err != nil {
 			t.Error(err)
 		}
 	})

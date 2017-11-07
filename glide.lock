@@ -1,5 +1,5 @@
-hash: 05dde604ad22be30290f9943bab8841b29ef4d34dd504f1fc17639bd45baeb42
-updated: 2017-11-03T17:57:46.435410364Z
+hash: bde48c901acaa71c975d012632dc360c4699a6004b48f3ca876d2c520be7d7d4
+updated: 2017-11-07T10:07:29.190534355Z
 imports:
 - name: github.com/armon/go-metrics
   version: f036747b9d0e8590f175a5d654a2194a7d9df4b5
@@ -121,7 +121,7 @@ imports:
 - name: github.com/SimonRichardson/betwixt
   version: 6bf309fe8d963cc635eeabbf73d82430c72761e5
 - name: github.com/SimonRichardson/flagset
-  version: 7f42c6fc3337747a51951bfa340665800fb71dac
+  version: d8eb0e54974d098768a93de414d268bc2d0a334f
 - name: github.com/SimonRichardson/gexec
   version: c3f2b6a0a84bbf048eafea7f53c393899492806b
 - name: github.com/SimonRichardson/resilience

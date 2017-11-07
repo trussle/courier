@@ -29,7 +29,7 @@ import (
 
 const (
 	defaultQueue            = "remote"
-	defaultAuditLog         = "nop"
+	defaultAuditLog         = "remote"
 	defaultAuditLogRootPath = "bin"
 	defaultFilesystem       = "nop"
 
@@ -47,8 +47,8 @@ const (
 
 	defaultRecipientURL        = ""
 	defaultNumConsumers        = 2
-	defaultMaxNumberOfMessages = 5
-	defaultVisibilityTimeout   = "1s"
+	defaultMaxNumberOfMessages = 10
+	defaultVisibilityTimeout   = "30s"
 	defaultMetricsRegistration = true
 )
 
@@ -347,6 +347,36 @@ func configureStore(logger log.Logger,
 	peers []string,
 ) (store.Store, error) {
 
+	// Make sure that we need the remote config, before going a head and setting
+	// it up. It prevents allocations that aren't required.
+	var (
+		err               error
+		remoteStoreConfig *store.RemoteConfig
+	)
+	if store.RequiresRemoteConfig(storeType) {
+		remoteStoreConfig, err = configureRemoteStore(logger, replicationFactor, bindAddr, advertiseAddr, peers)
+		if err != nil {
+			return nil, errors.Wrap(err, "store remote config")
+		}
+	}
+
+	storeConfig, err := store.Build(
+		store.With(storeType),
+		store.WithSize(size),
+		store.WithRemoteConfig(remoteStoreConfig),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "store config")
+	}
+
+	return store.New(storeConfig, log.With(logger, "component", "store"))
+}
+
+func configureRemoteStore(logger log.Logger,
+	replicationFactor int,
+	bindAddr, advertiseAddr string,
+	peers []string,
+) (*store.RemoteConfig, error) {
 	clusterBindHost, clusterBindPort, err := parseClusterAddr(bindAddr, defaultClusterPort)
 	if err != nil {
 		return nil, err
@@ -392,19 +422,8 @@ func configureStore(logger log.Logger,
 		return nil, errors.Wrap(err, "members remote")
 	}
 
-	storeRemoteConfig, err := store.BuildConfig(
+	return store.BuildConfig(
 		store.WithReplicationFactor(replicationFactor),
 		store.WithPeer(cluster.NewPeer(storeMembers, log.With(logger, "component", "peer"))),
 	)
-	if err != nil {
-		return nil, errors.Wrap(err, "store remote config")
-	}
-
-	storeConfig, err := store.Build(
-		store.With(storeType),
-		store.WithSize(size),
-		store.WithRemoteConfig(storeRemoteConfig),
-	)
-
-	return store.New(storeConfig, log.With(logger, "component", "store"))
 }

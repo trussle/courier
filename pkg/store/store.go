@@ -77,3 +77,8 @@ func New(config *Config, logger log.Logger) (store Store, err error) {
 	}
 	return
 }
+
+// RequiresRemoteConfig states if the remote configuration setup is required.
+func RequiresRemoteConfig(name string) bool {
+	return name == "remote"
+}
