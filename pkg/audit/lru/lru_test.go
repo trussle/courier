@@ -10,7 +10,7 @@ import (
 
 	"github.com/trussle/courier/pkg/audit/lru"
 	"github.com/trussle/courier/pkg/models"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/uuid"
 )
 
 func TestLRU_Add(t *testing.T) {
@@ -20,7 +20,7 @@ func TestLRU_Add(t *testing.T) {
 		fn := func(id0, id1 uuid.UUID, rec0, rec1 TestRecord) bool {
 			evictted := 0
 			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
-				if expected, actual := id0, k; !expected.Equal(actual) {
+				if expected, actual := id0, k; !expected.Equals(actual) {
 					t.Errorf("expected: %v, actual: %v", expected, actual)
 				}
 
@@ -272,7 +272,7 @@ func TestLRU_Remove(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
 			evictted := 0
 			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
-				if expected, actual := id0, k; !expected.Equal(actual) {
+				if expected, actual := id0, k; !expected.Equals(actual) {
 					t.Errorf("expected: %v, actual: %v", expected, actual)
 				}
 
@@ -328,7 +328,7 @@ func TestLRU_Pop(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
 			evictted := 0
 			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
-				if expected, actual := id0, k; !expected.Equal(actual) {
+				if expected, actual := id0, k; !expected.Equals(actual) {
 					t.Errorf("expected: %v, actual: %v", expected, actual)
 				}
 
@@ -350,7 +350,7 @@ func TestLRU_Pop(t *testing.T) {
 			if expected, actual := true, ok; expected != actual {
 				t.Errorf("expected: %t, actual: %t", expected, actual)
 			}
-			if expected, actual := id0, key; !expected.Equal(actual) {
+			if expected, actual := id0, key; !expected.Equals(actual) {
 				t.Errorf("expected: %v, actual: %v", expected, actual)
 			}
 			if expected, actual := rec0, value; !expected.Equal(actual) {
@@ -368,7 +368,7 @@ func TestLRU_Pop(t *testing.T) {
 		fn := func(id0, id1, id2 uuid.UUID, rec0, rec1, rec2 TestRecord) bool {
 			evictted := 0
 			onEviction := func(reason lru.EvictionReason, k uuid.UUID, v models.Record) {
-				if expected, actual := id0, k; !expected.Equal(actual) {
+				if expected, actual := id0, k; !expected.Equals(actual) {
 					t.Errorf("expected: %v, actual: %v", expected, actual)
 				}
 
@@ -582,7 +582,7 @@ func TestLRU_Dequeue(t *testing.T) {
 			}
 
 			got, err := l.Dequeue(func(key uuid.UUID, value models.Record) error {
-				if key.Equal(id1) {
+				if key.Equals(id1) {
 					return errors.New("bad")
 				}
 				return nil
@@ -640,7 +640,7 @@ func (t TestRecord) Failed(txn models.Transaction) error {
 
 // Equal checks the equality of records against each other
 func (t TestRecord) Equal(other models.Record) bool {
-	return t.ID().Equal(other.ID()) &&
+	return t.ID().Equals(other.ID()) &&
 		reflect.DeepEqual(t.Body(), other.Body())
 }
 
@@ -654,7 +654,7 @@ func (TestRecord) Generate(r *rand.Rand, size int) reflect.Value {
 }
 
 func generate(rnd *rand.Rand) (rec TestRecord, err error) {
-	if rec.id, err = uuid.New(rnd); err != nil {
+	if rec.id, err = uuid.NewWithRand(rnd); err != nil {
 		return
 	}
 

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/go-kit/kit/log"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/uuid"
 )
 
 func TestRealMembers_Integration(t *testing.T) {

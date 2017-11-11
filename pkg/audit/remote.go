@@ -14,7 +14,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/trussle/courier/pkg/audit/lru"
 	"github.com/trussle/courier/pkg/models"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/uuid"
 )
 
 const (

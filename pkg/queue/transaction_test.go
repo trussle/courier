@@ -6,7 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/trussle/courier/pkg/models"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/uuid"
 )
 
 func TestTransaction(t *testing.T) {
@@ -51,7 +51,7 @@ func TestTransaction(t *testing.T) {
 			err := txn.Walk(func(a uuid.UUID, b models.Record) error {
 				called = true
 
-				if expected, actual := true, id.Equal(a); expected != actual {
+				if expected, actual := true, id.Equals(a); expected != actual {
 					t.Errorf("expected: %t, actual: %t", expected, actual)
 				}
 				if expected, actual := true, rec.Equal(b); expected != actual {
@@ -79,7 +79,7 @@ func TestTransaction(t *testing.T) {
 			err := txn.Walk(func(a uuid.UUID, b models.Record) error {
 				called = true
 
-				if expected, actual := true, id.Equal(a); expected != actual {
+				if expected, actual := true, id.Equals(a); expected != actual {
 					t.Errorf("expected: %t, actual: %t", expected, actual)
 				}
 				if expected, actual := true, rec.Equal(b); expected != actual {

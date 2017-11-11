@@ -1,5 +1,5 @@
-hash: bde48c901acaa71c975d012632dc360c4699a6004b48f3ca876d2c520be7d7d4
-updated: 2017-11-07T10:07:29.190534355Z
+hash: ac438069ee266421042ecebd2efcf747658ac6a9c12b5d61155b445cfa3fb50e
+updated: 2017-11-11T10:06:24.054615868Z
 imports:
 - name: github.com/armon/go-metrics
   version: f036747b9d0e8590f175a5d654a2194a7d9df4b5
@@ -137,7 +137,9 @@ imports:
   - lock
   - mmap
 - name: github.com/trussle/harness
-  version: 3f78a70612b887e428821e3d49b11a0a9b5abc86
+  version: 2d32c1f9391a2d295c3fb6a769bf18e626251e4b
   subpackages:
   - generators
+- name: github.com/trussle/uuid
+  version: 23bc856a10519000ea4c17b77520ab48c3d3bbfd
 testImports: []

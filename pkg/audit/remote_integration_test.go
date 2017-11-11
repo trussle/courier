@@ -11,7 +11,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/trussle/courier/pkg/audit"
 	"github.com/trussle/courier/pkg/queue"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/uuid"
 )
 
 const (

@@ -13,8 +13,8 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
 	"github.com/trussle/courier/pkg/queue"
-	"github.com/trussle/courier/pkg/uuid"
 	"github.com/trussle/fsys"
+	"github.com/trussle/uuid"
 )
 
 func TestLocal(t *testing.T) {
@@ -37,7 +37,7 @@ func TestLocal(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		id, err := uuid.New(rnd)
+		id, err := uuid.NewWithRand(rnd)
 		if err != nil {
 			t.Fatal(err)
 		}

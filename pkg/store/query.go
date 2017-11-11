@@ -8,7 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 	errs "github.com/trussle/courier/pkg/http"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/uuid"
 )
 
 const (

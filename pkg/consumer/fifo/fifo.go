@@ -2,7 +2,7 @@ package fifo
 
 import (
 	"github.com/trussle/courier/pkg/models"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/uuid"
 )
 
 // EvictionReason describes why the eviction happened
@@ -56,7 +56,7 @@ func (f *FIFO) Add(key uuid.UUID, value models.Record) bool {
 // Returns true if found.
 func (f *FIFO) Get(key uuid.UUID) (models.Record, bool) {
 	for _, v := range f.items {
-		if v.Key.Equal(key) {
+		if v.Key.Equals(key) {
 			return v.Value, true
 		}
 	}
@@ -67,7 +67,7 @@ func (f *FIFO) Get(key uuid.UUID) (models.Record, bool) {
 // Returns true if a removal happened
 func (f *FIFO) Remove(key uuid.UUID) bool {
 	for k, v := range f.items {
-		if v.Key.Equal(key) {
+		if v.Key.Equals(key) {
 			f.items = append(f.items[:k], f.items[k+1:]...)
 			f.onEvict(Removed, v.Key, v.Value)
 			return true
@@ -79,7 +79,7 @@ func (f *FIFO) Remove(key uuid.UUID) bool {
 // Contains finds out if a key is present in the LRU cache
 func (f *FIFO) Contains(key uuid.UUID) bool {
 	for _, v := range f.items {
-		if v.Key.Equal(key) {
+		if v.Key.Equals(key) {
 			return true
 		}
 	}

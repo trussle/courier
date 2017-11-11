@@ -10,7 +10,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
 	"github.com/trussle/courier/pkg/models"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/uuid"
 	"github.com/trussle/fsys"
 )
 

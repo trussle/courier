@@ -13,7 +13,7 @@ import (
 	"github.com/trussle/courier/pkg/models"
 	"github.com/trussle/courier/pkg/queue"
 	"github.com/trussle/courier/pkg/store"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/uuid"
 )
 
 const (

@@ -1,7 +1,7 @@
 package models
 
 import (
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/uuid"
 )
 
 // Record represents a message from the underlying storage.

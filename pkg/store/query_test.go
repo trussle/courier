@@ -11,8 +11,8 @@ import (
 
 	"github.com/go-kit/kit/log"
 	errs "github.com/trussle/courier/pkg/http"
-	"github.com/trussle/courier/pkg/uuid"
 	"github.com/trussle/harness/generators"
+	"github.com/trussle/uuid"
 )
 
 func TestReplicationQueryParams(t *testing.T) {
@@ -217,7 +217,7 @@ func TestReplicationQueryResult(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			return obj.ID.Equal(uid)
+			return obj.ID.Equals(uid)
 		}
 
 		if err := quick.Check(fn, nil); err != nil {

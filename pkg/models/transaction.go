@@ -1,6 +1,6 @@
 package models
 
-import "github.com/trussle/courier/pkg/uuid"
+import "github.com/trussle/uuid"
 
 // Transaction represents a way of managing statefull actions (commit vs
 // failure)

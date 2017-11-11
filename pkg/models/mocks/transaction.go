@@ -7,7 +7,7 @@ package mocks
 import (
 	gomock "github.com/golang/mock/gomock"
 	models "github.com/trussle/courier/pkg/models"
-	uuid "github.com/trussle/courier/pkg/uuid"
+	uuid "github.com/trussle/uuid"
 	reflect "reflect"
 )
 

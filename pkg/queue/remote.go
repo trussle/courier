@@ -1,7 +1,6 @@
 package queue
 
 import (
-	"math/rand"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -14,7 +13,7 @@ import (
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
 	"github.com/trussle/courier/pkg/models"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/uuid"
 )
 
 // RemoteConfig creates a configuration to create a RemoteQueue.
@@ -34,7 +33,6 @@ type remoteQueue struct {
 	visibilityTimeout   *int64
 	stop                chan chan struct{}
 	records             chan models.Record
-	randSource          *rand.Rand
 	logger              log.Logger
 }
 
@@ -83,7 +81,6 @@ func newRemoteQueue(config *RemoteConfig, logger log.Logger) (Queue, error) {
 		visibilityTimeout:   aws.Int64(int64(config.VisibilityTimeout)),
 		stop:                make(chan chan struct{}),
 		records:             make(chan models.Record),
-		randSource:          rand.New(rand.NewSource(time.Now().UnixNano())),
 		logger:              logger,
 	}, nil
 }
@@ -114,7 +111,7 @@ func (v *remoteQueue) Dequeue() ([]models.Record, error) {
 
 	unique := make([]models.Record, len(resp.Messages))
 	for k, msg := range resp.Messages {
-		id, e := uuid.New(v.randSource)
+		id, e := uuid.New()
 		if e != nil {
 			continue
 		}

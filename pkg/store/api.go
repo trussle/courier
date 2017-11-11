@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"net/http"
 	"strconv"
 	"time"
@@ -14,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 	errs "github.com/trussle/courier/pkg/http"
 	"github.com/trussle/courier/pkg/metrics"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/uuid"
 )
 
 const (
@@ -33,7 +32,6 @@ type API struct {
 	clients  metrics.Gauge
 	duration metrics.HistogramVec
 	errors   errs.Error
-	rnd      *rand.Rand
 }
 
 // NewAPI creates a API with the correct dependencies.
@@ -48,7 +46,6 @@ func NewAPI(store Store,
 		clients:  clients,
 		duration: duration,
 		errors:   errs.NewError(logger),
-		rnd:      rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -109,7 +106,7 @@ func (a *API) handleReplication(w http.ResponseWriter, r *http.Request) {
 
 	// Make sure we collect the document for the result.
 	qr := ReplicationQueryResult{Errors: a.errors, Params: qp}
-	qr.ID, err = uuid.New(a.rnd)
+	qr.ID, err = uuid.New()
 	if err != nil {
 		a.errors.InternalServerError(w, r, err.Error())
 		return

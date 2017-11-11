@@ -2,7 +2,7 @@ package queue
 
 import (
 	"github.com/trussle/courier/pkg/models"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/uuid"
 )
 
 type idRecord struct {

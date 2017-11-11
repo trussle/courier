@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/trussle/courier/pkg/models"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/uuid"
 )
 
 type queueRecord struct {
@@ -40,7 +40,7 @@ func (r queueRecord) RecordID() string        { return r.messageID }
 func (r queueRecord) Body() []byte            { return r.body }
 
 func (r queueRecord) Equal(other models.Record) bool {
-	return r.ID().Equal(other.ID()) &&
+	return r.ID().Equals(other.ID()) &&
 		reflect.DeepEqual(r.Body(), other.Body())
 }
 
@@ -68,7 +68,7 @@ func GenerateQueueRecord(rnd *rand.Rand) (models.Record, error) {
 		rec = queueRecord{}
 	)
 
-	if rec.id, err = uuid.New(rnd); err != nil {
+	if rec.id, err = uuid.NewWithRand(rnd); err != nil {
 		return nil, err
 	}
 

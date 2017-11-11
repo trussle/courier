@@ -2,7 +2,7 @@ package lru
 
 import (
 	"github.com/trussle/courier/pkg/models"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/uuid"
 )
 
 type element struct {

@@ -9,7 +9,8 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/trussle/courier/pkg/models"
 	"github.com/trussle/courier/pkg/models/mocks"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/harness/matchers"
+	"github.com/trussle/uuid"
 )
 
 func TestRecord(t *testing.T) {
@@ -20,7 +21,7 @@ func TestRecord(t *testing.T) {
 			now := time.Now()
 			record := NewRecord(id, messageID, models.Receipt(receipt), body, now)
 
-			return record.ID().Equal(id) &&
+			return record.ID().Equals(id) &&
 				record.Receipt().String() == receipt &&
 				record.RecordID() == messageID &&
 				reflect.DeepEqual(record.Body(), body)
@@ -55,7 +56,7 @@ func TestRecord(t *testing.T) {
 
 			txn := mocks.NewMockTransaction(ctrl)
 
-			txn.EXPECT().Push(CompareUUID(rec.ID()), CompareRecord(rec)).Return(nil)
+			txn.EXPECT().Push(matchers.MatchUUID(rec.ID()), CompareRecord(rec)).Return(nil)
 
 			if err := rec.Commit(txn); err != nil {
 				t.Fatal(err)
@@ -75,7 +76,7 @@ func TestRecord(t *testing.T) {
 
 			txn := mocks.NewMockTransaction(ctrl)
 
-			txn.EXPECT().Push(CompareUUID(rec.ID()), CompareRecord(rec)).Return(nil)
+			txn.EXPECT().Push(matchers.MatchUUID(rec.ID()), CompareRecord(rec)).Return(nil)
 
 			if err := rec.Failed(txn); err != nil {
 				t.Fatal(err)
@@ -87,27 +88,6 @@ func TestRecord(t *testing.T) {
 			t.Error(err)
 		}
 	})
-}
-
-type uuidMatcher struct {
-	uuid uuid.UUID
-}
-
-func (m uuidMatcher) Matches(x interface{}) bool {
-	d, ok := x.(uuid.UUID)
-	if !ok {
-		return false
-	}
-
-	return m.uuid.Equal(d)
-}
-
-func (uuidMatcher) String() string {
-	return "is uuid"
-}
-
-func CompareUUID(doc uuid.UUID) gomock.Matcher {
-	return uuidMatcher{doc}
 }
 
 type recordMatcher struct {
