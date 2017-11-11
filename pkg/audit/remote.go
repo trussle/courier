@@ -101,8 +101,10 @@ func (r *remoteLog) Append(txn models.Transaction) error {
 		Records:            records,
 	}
 
-	if _, err := r.client.PutRecordBatch(input); err != nil {
+	if output, err := r.client.PutRecordBatch(input); err != nil {
 		return err
+	} else if failed := int(*output.FailedPutCount); failed > 0 {
+		level.Warn(r.logger).Log("state", "remote-put", "failed", failed)
 	}
 
 	// Store the transactions in the LRU
