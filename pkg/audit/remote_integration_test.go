@@ -64,7 +64,7 @@ func TestRemoteLog_Integration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		id, err := uuid.New(rnd)
+		id, err := uuid.NewWithRand(rnd)
 		if err != nil {
 			t.Fatal(err)
 		}

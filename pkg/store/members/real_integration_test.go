@@ -4,10 +4,8 @@ package members
 
 import (
 	"io/ioutil"
-	"math/rand"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/go-kit/kit/log"
 	"github.com/trussle/uuid"
@@ -136,9 +134,7 @@ func TestRealMembers_Integration(t *testing.T) {
 func TestRealMemberList(t *testing.T) {
 	t.Parallel()
 
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	id, err := uuid.New(rnd)
+	id, err := uuid.New()
 	if err != nil {
 		t.Fatal(err)
 	}
