@@ -32,6 +32,7 @@ func runHarness(args []string) error {
 		debug   = flags.Bool("debug", false, "debug logging")
 		apiAddr = flags.String("api", defaultAPIAddr, "listen address for harness API")
 
+		awsEC2Role  = flags.Bool("aws.ec2.role", defaultEC2Role, "AWS configuration to use EC2 roles")
 		awsID       = flags.String("aws.id", defaultAWSID, "AWS configuration id")
 		awsSecret   = flags.String("aws.secret", defaultAWSSecret, "AWS configuration secret")
 		awsToken    = flags.String("aws.token", defaultAWSToken, "AWS configuration token")
@@ -62,12 +63,12 @@ func runHarness(args []string) error {
 
 	// Instrumentation
 	connectedClients := prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "courier_transformer_store",
+		Namespace: "courier_transformer",
 		Name:      "connected_clients",
 		Help:      "Number of currently connected clients by modality.",
 	}, []string{"modality"})
 	apiDuration := prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "courier_transformer_store",
+		Namespace: "courier_transformer",
 		Name:      "api_request_duration_seconds",
 		Help:      "API request duration in seconds.",
 		Buckets:   prometheus.DefBuckets,
@@ -91,6 +92,7 @@ func runHarness(args []string) error {
 
 	// Configuration for the queue
 	remoteConfig, err := queue.BuildConfig(
+		queue.WithEC2Role(*awsEC2Role),
 		queue.WithID(*awsID),
 		queue.WithSecret(*awsSecret),
 		queue.WithToken(*awsToken),

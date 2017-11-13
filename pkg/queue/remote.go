@@ -74,6 +74,8 @@ func newRemoteQueue(config *RemoteConfig, logger log.Logger) (Queue, error) {
 		return nil, err
 	}
 
+	level.Debug(logger).Log("queue_url", *queueURL.QueueUrl)
+
 	return &remoteQueue{
 		client:              client,
 		queueURL:            queueURL.QueueUrl,

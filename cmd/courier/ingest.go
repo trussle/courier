@@ -37,6 +37,7 @@ const (
 	defaultCacheSize         = 1000
 	defaultReplicationFactor = 2
 
+	defaultEC2Role   = true
 	defaultAWSID     = ""
 	defaultAWSSecret = ""
 	defaultAWSToken  = ""
@@ -60,6 +61,7 @@ func runIngest(args []string) error {
 		debug   = flags.Bool("debug", false, "debug logging")
 		apiAddr = flags.String("api", defaultAPIAddr, "listen address for ingest API")
 
+		awsEC2Role             = flags.Bool("aws.ec2.role", defaultEC2Role, "AWS configuration to use EC2 roles")
 		awsID                  = flags.String("aws.id", defaultAWSID, "AWS configuration id")
 		awsSecret              = flags.String("aws.secret", defaultAWSSecret, "AWS configuration secret")
 		awsToken               = flags.String("aws.token", defaultAWSToken, "AWS configuration token")
@@ -99,6 +101,8 @@ func runIngest(args []string) error {
 		logger = log.With(logger, "ts", log.DefaultTimestampUTC)
 		logger = level.NewFilter(logger, logLevel)
 	}
+
+	level.Debug(logger).Log("ec2_role", *awsEC2Role, "aws_region", *awsRegion, "aws_sqs_queue", *awsSQSQueue, "aws_firehose_stream", *awsFirehoseStream)
 
 	// Instrumentation
 	connectedClients := prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -187,6 +191,7 @@ func runIngest(args []string) error {
 
 	// Firehose setup.
 	auditRemoteConfig, err := audit.BuildRemoteConfig(
+		audit.WithEC2Role(*awsEC2Role),
 		audit.WithID(*awsID),
 		audit.WithSecret(*awsSecret),
 		audit.WithToken(*awsToken),
@@ -214,6 +219,7 @@ func runIngest(args []string) error {
 
 	// Configuration for the queue
 	queueRemoteConfig, err := queue.BuildConfig(
+		queue.WithEC2Role(*awsEC2Role),
 		queue.WithID(*awsID),
 		queue.WithSecret(*awsSecret),
 		queue.WithToken(*awsToken),
