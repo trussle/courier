@@ -1,4 +1,4 @@
-package store
+package cache
 
 import (
 	"testing"
@@ -9,7 +9,7 @@ import (
 	"github.com/trussle/harness/generators"
 )
 
-func TestBuildingStore(t *testing.T) {
+func TestBuildingCache(t *testing.T) {
 	t.Parallel()
 
 	t.Run("build", func(t *testing.T) {

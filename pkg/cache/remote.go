@@ -1,14 +1,15 @@
-package store
+package cache
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"net/http"
 
 	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
-	"github.com/trussle/courier/pkg/store/client"
-	"github.com/trussle/courier/pkg/store/cluster"
+	"github.com/trussle/courier/pkg/cache/client"
+	"github.com/trussle/courier/pkg/cache/cluster"
 )
 
 // RemoteConfig creates a configuration to create a RemoteLog.
@@ -17,17 +18,17 @@ type RemoteConfig struct {
 	Peer              cluster.Peer
 }
 
-type remoteStore struct {
-	local             Store
+type remoteCache struct {
+	local             Cache
 	client            *client.Client
 	peer              cluster.Peer
 	replicationFactor int
 	logger            log.Logger
 }
 
-func newRemoteStore(size int, config *RemoteConfig, logger log.Logger) Store {
-	return &remoteStore{
-		local:             newVirtualStore(size),
+func newRemoteCache(size int, config *RemoteConfig, logger log.Logger) Cache {
+	return &remoteCache{
+		local:             newVirtualCache(size),
 		client:            client.NewClient(http.DefaultClient),
 		peer:              config.Peer,
 		replicationFactor: config.ReplicationFactor,
@@ -35,8 +36,8 @@ func newRemoteStore(size int, config *RemoteConfig, logger log.Logger) Store {
 	}
 }
 
-func (v *remoteStore) Add(idents []string) error {
-	instances, err := v.storeInstances()
+func (v *remoteCache) Add(idents []string) error {
+	instances, err := v.cacheInstances()
 	if err != nil {
 		return err
 	}
@@ -50,7 +51,7 @@ func (v *remoteStore) Add(idents []string) error {
 
 // union = matched
 // difference = not matched
-func (v *remoteStore) Intersection(idents []string) (union, difference []string, err error) {
+func (v *remoteCache) Intersection(idents []string) (union, difference []string, err error) {
 	// Check typical exit clause.
 	var localUnion, localDifference []string
 	localUnion, localDifference, err = v.local.Intersection(idents)
@@ -59,7 +60,7 @@ func (v *remoteStore) Intersection(idents []string) (union, difference []string,
 	}
 
 	var instances []string
-	instances, err = v.storeInstances()
+	instances, err = v.cacheInstances()
 	if err != nil {
 		return
 	}
@@ -102,13 +103,13 @@ func (v *remoteStore) Intersection(idents []string) (union, difference []string,
 	return
 }
 
-func (v *remoteStore) storeInstances() ([]string, error) {
+func (v *remoteCache) cacheInstances() ([]string, error) {
 	instances, err := v.peer.Current(cluster.PeerTypeStore)
 	if err != nil {
 		return nil, err
 	}
 
-	// Zero instances, store locally.
+	// Zero instances, cache locally.
 	numInstances := len(instances)
 	if numInstances == 0 {
 		return nil, errors.Errorf("no instances")
@@ -120,7 +121,7 @@ func (v *remoteStore) storeInstances() ([]string, error) {
 	return instances, nil
 }
 
-func (v *remoteStore) replicate(instances, idents []string) error {
+func (v *remoteCache) replicate(instances, idents []string) error {
 	body, err := json.Marshal(IngestInput{
 		Identifiers: idents,
 	})
@@ -138,7 +139,7 @@ func (v *remoteStore) replicate(instances, idents []string) error {
 			index    = indices[i]
 			instance = instances[index]
 		)
-		_, err := v.client.Post(instance, body)
+		_, err := v.client.Post(fmt.Sprintf("%s/cache/%s", instance, APIPathReplication), body)
 		if err != nil {
 			continue
 		}
@@ -152,7 +153,7 @@ func (v *remoteStore) replicate(instances, idents []string) error {
 	return nil
 }
 
-func (v *remoteStore) gather(instances, idents []string) ([]Intersections, error) {
+func (v *remoteCache) gather(instances, idents []string) ([]Intersections, error) {
 	body, err := json.Marshal(IngestInput{
 		Identifiers: idents,
 	})
@@ -171,7 +172,7 @@ func (v *remoteStore) gather(instances, idents []string) ([]Intersections, error
 			index    = indices[i]
 			instance = instances[index]
 		)
-		resp, err := v.client.Post(instance, body)
+		resp, err := v.client.Post(fmt.Sprintf("%s/cache/%s", instance, APIPathIntersection), body)
 		if err != nil {
 			continue
 		}

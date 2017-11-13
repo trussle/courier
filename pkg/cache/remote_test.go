@@ -1,4 +1,4 @@
-package store
+package cache
 
 import (
 	"encoding/json"
@@ -9,8 +9,8 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/golang/mock/gomock"
-	"github.com/trussle/courier/pkg/store/cluster"
-	"github.com/trussle/courier/pkg/store/cluster/mocks"
+	"github.com/trussle/courier/pkg/cache/cluster"
+	"github.com/trussle/courier/pkg/cache/cluster/mocks"
 )
 
 func TestRemoteAdd(t *testing.T) {
@@ -27,12 +27,12 @@ func TestRemoteAdd(t *testing.T) {
 				Peer:              mock,
 			}
 			instances = []string{}
-			store     = newRemoteStore(100, config, log.NewNopLogger())
+			cache     = newRemoteCache(100, config, log.NewNopLogger())
 		)
 
 		mock.EXPECT().Current(cluster.PeerTypeStore).Return(instances, nil)
 
-		err := store.Add([]string{"a", "b"})
+		err := cache.Add([]string{"a", "b"})
 		if expected, actual := false, err == nil; expected != actual {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
@@ -52,12 +52,12 @@ func TestRemoteAdd(t *testing.T) {
 				"http://a.com",
 				"http://b.com",
 			}
-			store = newRemoteStore(100, config, log.NewNopLogger())
+			cache = newRemoteCache(100, config, log.NewNopLogger())
 		)
 
 		mock.EXPECT().Current(cluster.PeerTypeStore).Return(instances, nil)
 
-		err := store.Add([]string{"a", "b"})
+		err := cache.Add([]string{"a", "b"})
 		if expected, actual := false, err == nil; expected != actual {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
@@ -74,7 +74,7 @@ func TestRemoteAdd(t *testing.T) {
 				ReplicationFactor: len(instances),
 				Peer:              mock,
 			}
-			store = newRemoteStore(2, config, log.NewNopLogger())
+			cache = newRemoteCache(2, config, log.NewNopLogger())
 		)
 
 		handle := func(k int) func(http.ResponseWriter, *http.Request) {
@@ -98,7 +98,7 @@ func TestRemoteAdd(t *testing.T) {
 
 		mock.EXPECT().Current(cluster.PeerTypeStore).Return(instances, nil)
 
-		err := store.Add([]string{"a", "b"})
+		err := cache.Add([]string{"a", "b"})
 		if expected, actual := false, err == nil; expected != actual {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
@@ -115,7 +115,7 @@ func TestRemoteAdd(t *testing.T) {
 				ReplicationFactor: len(instances),
 				Peer:              mock,
 			}
-			store = newRemoteStore(2, config, log.NewNopLogger())
+			cache = newRemoteCache(2, config, log.NewNopLogger())
 		)
 
 		for k := range instances {
@@ -131,7 +131,7 @@ func TestRemoteAdd(t *testing.T) {
 
 		mock.EXPECT().Current(cluster.PeerTypeStore).Return(instances, nil)
 
-		err := store.Add([]string{"a", "b"})
+		err := cache.Add([]string{"a", "b"})
 		if expected, actual := true, err == nil; expected != actual {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
@@ -152,7 +152,7 @@ func TestRemoteIntersection(t *testing.T) {
 				ReplicationFactor: 100,
 				Peer:              mock,
 			}
-			store = newRemoteStore(2, config, log.NewNopLogger())
+			cache = newRemoteCache(2, config, log.NewNopLogger())
 		)
 
 		for k := range instances {
@@ -168,7 +168,7 @@ func TestRemoteIntersection(t *testing.T) {
 
 		mock.EXPECT().Current(cluster.PeerTypeStore).Return(instances, nil)
 
-		_, _, err := store.Intersection([]string{"a", "b"})
+		_, _, err := cache.Intersection([]string{"a", "b"})
 		if expected, actual := false, err == nil; expected != actual {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
@@ -185,7 +185,7 @@ func TestRemoteIntersection(t *testing.T) {
 				ReplicationFactor: len(instances),
 				Peer:              mock,
 			}
-			store = newRemoteStore(2, config, log.NewNopLogger())
+			cache = newRemoteCache(2, config, log.NewNopLogger())
 		)
 
 		for k := range instances {
@@ -201,7 +201,7 @@ func TestRemoteIntersection(t *testing.T) {
 
 		mock.EXPECT().Current(cluster.PeerTypeStore).Return(instances, nil)
 
-		_, _, err := store.Intersection([]string{"a", "b"})
+		_, _, err := cache.Intersection([]string{"a", "b"})
 		if expected, actual := false, err == nil; expected != actual {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
@@ -218,7 +218,7 @@ func TestRemoteIntersection(t *testing.T) {
 				ReplicationFactor: len(instances),
 				Peer:              mock,
 			}
-			store = newRemoteStore(2, config, log.NewNopLogger())
+			cache = newRemoteCache(2, config, log.NewNopLogger())
 		)
 
 		for k := range instances {
@@ -238,7 +238,7 @@ func TestRemoteIntersection(t *testing.T) {
 
 		mock.EXPECT().Current(cluster.PeerTypeStore).Return(instances, nil)
 
-		union, difference, err := store.Intersection([]string{"a", "b"})
+		union, difference, err := cache.Intersection([]string{"a", "b"})
 		if expected, actual := true, err == nil; expected != actual {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}

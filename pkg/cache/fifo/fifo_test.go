@@ -5,7 +5,7 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/trussle/courier/pkg/store/fifo"
+	"github.com/trussle/courier/pkg/cache/fifo"
 	"github.com/trussle/harness/generators"
 )
 

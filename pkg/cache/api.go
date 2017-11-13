@@ -1,4 +1,4 @@
-package store
+package cache
 
 import (
 	"encoding/json"
@@ -25,9 +25,9 @@ const (
 	APIPathIntersection = "/intersect"
 )
 
-// API serves the store API
+// API serves the cache API
 type API struct {
-	store    Store
+	cache    Cache
 	logger   log.Logger
 	clients  metrics.Gauge
 	duration metrics.HistogramVec
@@ -35,13 +35,13 @@ type API struct {
 }
 
 // NewAPI creates a API with the correct dependencies.
-func NewAPI(store Store,
+func NewAPI(cache Cache,
 	logger log.Logger,
 	clients metrics.Gauge,
 	duration metrics.HistogramVec,
 ) *API {
 	return &API{
-		store:    store,
+		cache:    cache,
 		logger:   logger,
 		clients:  clients,
 		duration: duration,
@@ -99,7 +99,7 @@ func (a *API) handleReplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.store.Add(txn); err != nil {
+	if err := a.cache.Add(txn); err != nil {
 		a.errors.InternalServerError(w, r, err.Error())
 		return
 	}
@@ -136,7 +136,7 @@ func (a *API) handleIntersection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	union, difference, err := a.store.Intersection(idents)
+	union, difference, err := a.cache.Intersection(idents)
 	if err != nil {
 		a.errors.InternalServerError(w, r, err.Error())
 		return

@@ -1,18 +1,18 @@
-package store
+package cache
 
 import (
 	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
 )
 
-// Store holds identifiers with associated records
-type Store interface {
+// Cache holds identifiers with associated records
+type Cache interface {
 
-	// Add a transaction of identifiers to a associated to the store.
+	// Add a transaction of identifiers to a associated to the cache.
 	Add([]string) error
 
 	// Intersection reports back the union and difference of the identifiers
-	// found with in the store.
+	// found with in the cache.
 	Intersection([]string) (union, difference []string, err error)
 }
 
@@ -64,16 +64,16 @@ func WithRemoteConfig(remoteConfig *RemoteConfig) Option {
 }
 
 // New returns a new log
-func New(config *Config, logger log.Logger) (store Store, err error) {
+func New(config *Config, logger log.Logger) (cache Cache, err error) {
 	switch config.name {
 	case "remote":
-		store = newRemoteStore(config.size, config.remoteConfig, logger)
+		cache = newRemoteCache(config.size, config.remoteConfig, logger)
 	case "local":
-		store = newVirtualStore(config.size)
+		cache = newVirtualCache(config.size)
 	case "nop":
-		store = newNopStore()
+		cache = newNopCache()
 	default:
-		err = errors.Errorf("unexpected store type %q", config.name)
+		err = errors.Errorf("unexpected cache type %q", config.name)
 	}
 	return
 }

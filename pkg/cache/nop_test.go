@@ -1,4 +1,4 @@
-package store
+package cache
 
 import (
 	"reflect"
@@ -11,8 +11,8 @@ func TestNop(t *testing.T) {
 
 	t.Run("add", func(t *testing.T) {
 		fn := func(a []string) bool {
-			store := newNopStore()
-			return store.Add(a) == nil
+			cache := newNopCache()
+			return cache.Add(a) == nil
 		}
 		if err := quick.Check(fn, nil); err != nil {
 			t.Error(err)
@@ -21,8 +21,8 @@ func TestNop(t *testing.T) {
 
 	t.Run("intersection", func(t *testing.T) {
 		fn := func(a []string) bool {
-			store := newNopStore()
-			union, difference, err := store.Intersection(a)
+			cache := newNopCache()
+			union, difference, err := cache.Intersection(a)
 			if expected, actual := 0, len(union); expected != actual {
 				t.Errorf("expected: %d, actual: %d", expected, actual)
 			}

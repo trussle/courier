@@ -1,20 +1,20 @@
-package store
+package cache
 
 import (
-	"github.com/trussle/courier/pkg/store/fifo"
+	"github.com/trussle/courier/pkg/cache/fifo"
 )
 
-type virtualStore struct {
+type virtualCache struct {
 	fifo *fifo.FIFO
 }
 
-func newVirtualStore(size int) Store {
-	store := &virtualStore{}
-	store.fifo = fifo.NewFIFO(size, store.onElementEviction)
-	return store
+func newVirtualCache(size int) Cache {
+	cache := &virtualCache{}
+	cache.fifo = fifo.NewFIFO(size, cache.onElementEviction)
+	return cache
 }
 
-func (v *virtualStore) Add(idents []string) error {
+func (v *virtualCache) Add(idents []string) error {
 	for _, ident := range idents {
 		if !v.fifo.Contains(ident) {
 			v.fifo.Add(ident)
@@ -23,7 +23,7 @@ func (v *virtualStore) Add(idents []string) error {
 	return nil
 }
 
-func (v *virtualStore) Intersection(idents []string) ([]string, []string, error) {
+func (v *virtualCache) Intersection(idents []string) ([]string, []string, error) {
 	var (
 		union      = make([]string, 0)
 		difference = make([]string, 0)
@@ -39,7 +39,7 @@ func (v *virtualStore) Intersection(idents []string) ([]string, []string, error)
 	return union, difference, nil
 }
 
-func (v *virtualStore) onElementEviction(reason fifo.EvictionReason, key string) {
+func (v *virtualCache) onElementEviction(reason fifo.EvictionReason, key string) {
 	// do nothing
 }
 

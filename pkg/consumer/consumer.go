@@ -7,12 +7,12 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/trussle/courier/pkg/audit"
+	"github.com/trussle/courier/pkg/cache"
 	"github.com/trussle/courier/pkg/consumer/fifo"
 	"github.com/trussle/courier/pkg/http"
 	"github.com/trussle/courier/pkg/metrics"
 	"github.com/trussle/courier/pkg/models"
 	"github.com/trussle/courier/pkg/queue"
-	"github.com/trussle/courier/pkg/store"
 	"github.com/trussle/uuid"
 )
 
@@ -31,7 +31,7 @@ type Consumer struct {
 	client             *http.Client
 	queue              queue.Queue
 	log                audit.Log
-	store              store.Store
+	cache              cache.Cache
 	fifo               *fifo.FIFO
 	activeSince        time.Time
 	activeTargetAge    time.Duration
@@ -53,7 +53,7 @@ func New(
 	client *http.Client,
 	queue queue.Queue,
 	log audit.Log,
-	store store.Store,
+	cache cache.Cache,
 	consumedSegments, consumedRecords metrics.Counter,
 	replicatedSegments, replicatedRecords metrics.Counter,
 	failedSegments, failedRecords metrics.Counter,
@@ -64,7 +64,7 @@ func New(
 		client:             client,
 		queue:              queue,
 		log:                log,
-		store:              store,
+		cache:              cache,
 		activeSince:        time.Time{},
 		activeTargetAge:    defaultActiveTargetAge,
 		activeTargetSize:   defaultActiveTargetSize,
@@ -151,7 +151,7 @@ func (c *Consumer) gather() stateFn {
 		return c.gather
 	}
 
-	// Find if any records have intersected with the store records.
+	// Find if any records have intersected with the cache records.
 	var (
 		values = make(map[string]models.Record)
 		idents = make([]string, len(records))
@@ -164,7 +164,7 @@ func (c *Consumer) gather() stateFn {
 		idents[k] = id
 	}
 
-	_, difference, err := c.store.Intersection(idents)
+	_, difference, err := c.cache.Intersection(idents)
 	if err != nil {
 		difference = idents
 	}
@@ -274,8 +274,8 @@ func (c *Consumer) commit(values []fifo.KeyValue) error {
 	for k, v := range values {
 		idents[k] = v.Value.RecordID()
 	}
-	if err := c.store.Add(idents); err != nil {
-		warn.Log("state", "commit", "action", "store", "err", err)
+	if err := c.cache.Add(idents); err != nil {
+		warn.Log("state", "commit", "action", "cache", "err", err)
 	}
 
 	return txn.Flush()

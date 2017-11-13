@@ -1,4 +1,4 @@
-package store
+package cache
 
 import (
 	"bytes"
@@ -25,8 +25,8 @@ func TestAPIIntersect(t *testing.T) {
 			clients  = metricMocks.NewMockGauge(ctrl)
 			duration = metricMocks.NewMockHistogramVec(ctrl)
 			observer = metricMocks.NewMockObserver(ctrl)
-			store    = newVirtualStore(10)
-			api      = NewAPI(store, log.NewNopLogger(), clients, duration)
+			cache    = newVirtualCache(10)
+			api      = NewAPI(cache, log.NewNopLogger(), clients, duration)
 			server   = httptest.NewServer(api)
 		)
 		defer server.Close()
@@ -56,8 +56,8 @@ func TestAPIIntersect(t *testing.T) {
 			clients  = metricMocks.NewMockGauge(ctrl)
 			duration = metricMocks.NewMockHistogramVec(ctrl)
 			observer = metricMocks.NewMockObserver(ctrl)
-			store    = newVirtualStore(10)
-			api      = NewAPI(store, log.NewNopLogger(), clients, duration)
+			cache    = newVirtualCache(10)
+			api      = NewAPI(cache, log.NewNopLogger(), clients, duration)
 			server   = httptest.NewServer(api)
 		)
 		defer server.Close()
@@ -108,8 +108,8 @@ func TestAPIIntersect(t *testing.T) {
 			clients  = metricMocks.NewMockGauge(ctrl)
 			duration = metricMocks.NewMockHistogramVec(ctrl)
 			observer = metricMocks.NewMockObserver(ctrl)
-			store    = newVirtualStore(10)
-			api      = NewAPI(store, log.NewNopLogger(), clients, duration)
+			cache    = newVirtualCache(10)
+			api      = NewAPI(cache, log.NewNopLogger(), clients, duration)
 			server   = httptest.NewServer(api)
 		)
 		defer server.Close()
@@ -170,8 +170,8 @@ func TestAPIIntersect(t *testing.T) {
 			clients  = metricMocks.NewMockGauge(ctrl)
 			duration = metricMocks.NewMockHistogramVec(ctrl)
 			observer = metricMocks.NewMockObserver(ctrl)
-			store    = newVirtualStore(10)
-			api      = NewAPI(store, log.NewNopLogger(), clients, duration)
+			cache    = newVirtualCache(10)
+			api      = NewAPI(cache, log.NewNopLogger(), clients, duration)
 			server   = httptest.NewServer(api)
 		)
 		defer server.Close()
@@ -240,8 +240,8 @@ func TestAPIReplicate(t *testing.T) {
 			clients  = metricMocks.NewMockGauge(ctrl)
 			duration = metricMocks.NewMockHistogramVec(ctrl)
 			observer = metricMocks.NewMockObserver(ctrl)
-			store    = newVirtualStore(10)
-			api      = NewAPI(store, log.NewNopLogger(), clients, duration)
+			cache    = newVirtualCache(10)
+			api      = NewAPI(cache, log.NewNopLogger(), clients, duration)
 			server   = httptest.NewServer(api)
 		)
 		defer server.Close()
@@ -270,8 +270,8 @@ func TestAPIReplicate(t *testing.T) {
 			clients  = metricMocks.NewMockGauge(ctrl)
 			duration = metricMocks.NewMockHistogramVec(ctrl)
 			observer = metricMocks.NewMockObserver(ctrl)
-			store    = newVirtualStore(10)
-			api      = NewAPI(store, log.NewNopLogger(), clients, duration)
+			cache    = newVirtualCache(10)
+			api      = NewAPI(cache, log.NewNopLogger(), clients, duration)
 			server   = httptest.NewServer(api)
 		)
 		defer server.Close()
@@ -299,7 +299,7 @@ func TestAPIReplicate(t *testing.T) {
 			t.Errorf("expected: %d, actual: %d", expected, actual)
 		}
 
-		union, difference, err := store.Intersection(idents)
+		union, difference, err := cache.Intersection(idents)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -320,8 +320,8 @@ func TestAPIReplicate(t *testing.T) {
 			clients  = metricMocks.NewMockGauge(ctrl)
 			duration = metricMocks.NewMockHistogramVec(ctrl)
 			observer = metricMocks.NewMockObserver(ctrl)
-			store    = newVirtualStore(10)
-			api      = NewAPI(store, log.NewNopLogger(), clients, duration)
+			cache    = newVirtualCache(10)
+			api      = NewAPI(cache, log.NewNopLogger(), clients, duration)
 			server   = httptest.NewServer(api)
 		)
 		defer server.Close()
@@ -349,7 +349,7 @@ func TestAPIReplicate(t *testing.T) {
 			t.Errorf("expected: %d, actual: %d", expected, actual)
 		}
 
-		union, difference, err := store.Intersection(idents)
+		union, difference, err := cache.Intersection(idents)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -374,7 +374,7 @@ func TestAPINotFound(t *testing.T) {
 			clients  = metricMocks.NewMockGauge(ctrl)
 			duration = metricMocks.NewMockHistogramVec(ctrl)
 			observer = metricMocks.NewMockObserver(ctrl)
-			api      = NewAPI(newNopStore(), log.NewNopLogger(), clients, duration)
+			api      = NewAPI(newNopCache(), log.NewNopLogger(), clients, duration)
 			server   = httptest.NewServer(api)
 		)
 		defer server.Close()
