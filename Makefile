@@ -28,6 +28,18 @@ pkg/audit/mocks/log.go:
 	mockgen -package=mocks -destination=pkg/audit/mocks/log.go ${PATH_COURIER}/pkg/audit Log
 	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/audit/mocks/log.go
 
+pkg/cache/mocks/log.go:
+	mockgen -package=mocks -destination=pkg/cache/mocks/cache.go ${PATH_COURIER}/pkg/cache Cache
+	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/cache/mocks/cache.go
+
+pkg/cache/cluster/mocks/peer.go:
+	mockgen -package=mocks -destination=pkg/cache/cluster/mocks/peer.go ${PATH_COURIER}/pkg/cache/cluster Peer
+	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/cache/cluster/mocks/peer.go
+
+pkg/cache/members/mocks/members.go:
+	mockgen -package=mocks -destination=pkg/cache/members/mocks/members.go ${PATH_COURIER}/pkg/cache/members Members,MemberList,Member
+	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/cache/members/mocks/members.go
+
 pkg/metrics/mocks/metrics.go:
 	mockgen -package=mocks -destination=pkg/metrics/mocks/metrics.go ${PATH_COURIER}/pkg/metrics Gauge,HistogramVec,Counter
 	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/metrics/mocks/metrics.go
@@ -48,35 +60,29 @@ pkg/queue/mocks/queue.go:
 	mockgen -package=mocks -destination=pkg/queue/mocks/queue.go ${PATH_COURIER}/pkg/queue Queue
 	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/queue/mocks/queue.go
 
-pkg/store/cluster/mocks/peer.go:
-	mockgen -package=mocks -destination=pkg/store/cluster/mocks/peer.go ${PATH_COURIER}/pkg/store/cluster Peer
-	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/store/cluster/mocks/peer.go
-
-pkg/store/members/mocks/members.go:
-	mockgen -package=mocks -destination=pkg/store/members/mocks/members.go ${PATH_COURIER}/pkg/store/members Members,MemberList,Member
-	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/store/members/mocks/members.go
-
 .PHONY: build-mocks
 build-mocks: FORCE
 	@ $(MAKE) pkg/audit/mocks/log.go
+	@ $(MAKE) pkg/cache/cluster/mocks/peer.go
+	@ $(MAKE) pkg/cache/members/mocks/members.go
+	@ $(MAKE) pkg/cache/mocks/log.go
 	@ $(MAKE) pkg/metrics/mocks/metrics.go
 	@ $(MAKE) pkg/metrics/mocks/observer.go
 	@ $(MAKE) pkg/models/mocks/record.go
 	@ $(MAKE) pkg/models/mocks/transaction.go
 	@ $(MAKE) pkg/queue/mocks/queue.go
-	@ $(MAKE) pkg/store/cluster/mocks/peer.go
-	@ $(MAKE) pkg/store/members/mocks/members.go
 
 .PHONY: clean-mocks
 clean-mocks: FORCE
 	rm -f pkg/audit/mocks/log.go
+	rm -f pkg/cache/cluster/mocks/peer.go
+	rm -f pkg/cache/members/mocks/members.go
+	rm -f pkg/cache/mocks/log.go
 	rm -f pkg/metrics/mocks/metrics.go
 	rm -f pkg/metrics/mocks/observer.go
 	rm -f pkg/models/mocks/record.go
 	rm -f pkg/models/mocks/transaction.go
 	rm -f pkg/queue/mocks/queue.go
-	rm -f pkg/store/cluster/mocks/peer.go
-	rm -f pkg/store/members/mocks/members.go
 
 .PHONY: clean
 clean: FORCE
