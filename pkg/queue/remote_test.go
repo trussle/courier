@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/trussle/courier/pkg/uuid"
 )
 
 func TestConfigBuild(t *testing.T) {
