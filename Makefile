@@ -16,7 +16,7 @@ install:
 	go get github.com/mattn/goveralls
 	go get github.com/golang/mock/mockgen
 	go get github.com/prometheus/client_golang/prometheus
-	glide install
+	glide install --strip-vendor
 
 .PHONY: build
 build: dist/courier
@@ -24,33 +24,65 @@ build: dist/courier
 dist/courier:
 	go build -o dist/courier ${PATH_COURIER}/cmd/courier
 
+pkg/audit/mocks/log.go:
+	mockgen -package=mocks -destination=pkg/audit/mocks/log.go ${PATH_COURIER}/pkg/audit Log
+	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/audit/mocks/log.go
+
+pkg/cache/mocks/log.go:
+	mockgen -package=mocks -destination=pkg/cache/mocks/cache.go ${PATH_COURIER}/pkg/cache Cache
+	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/cache/mocks/cache.go
+
+pkg/cache/cluster/mocks/peer.go:
+	mockgen -package=mocks -destination=pkg/cache/cluster/mocks/peer.go ${PATH_COURIER}/pkg/cache/cluster Peer
+	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/cache/cluster/mocks/peer.go
+
+pkg/cache/members/mocks/members.go:
+	mockgen -package=mocks -destination=pkg/cache/members/mocks/members.go ${PATH_COURIER}/pkg/cache/members Members,MemberList,Member
+	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/cache/members/mocks/members.go
+
 pkg/metrics/mocks/metrics.go:
 	mockgen -package=mocks -destination=pkg/metrics/mocks/metrics.go ${PATH_COURIER}/pkg/metrics Gauge,HistogramVec,Counter
-	$(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/metrics/mocks/metrics.go
+	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/metrics/mocks/metrics.go
 
 pkg/metrics/mocks/observer.go:
 	mockgen -package=mocks -destination=pkg/metrics/mocks/observer.go github.com/prometheus/client_golang/prometheus Observer
+	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/metrics/mocks/observer.go
+
+pkg/models/mocks/transaction.go:
+	mockgen -package=mocks -destination=pkg/models/mocks/transaction.go ${PATH_COURIER}/pkg/models Transaction
+	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/models/mocks/transaction.go
+
+pkg/models/mocks/record.go:
+	mockgen -package=mocks -destination=pkg/models/mocks/record.go ${PATH_COURIER}/pkg/models Record
+	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/models/mocks/record.go
 
 pkg/queue/mocks/queue.go:
-	mockgen -package=mocks -destination=pkg/queue/mocks/queue.go ${PATH_COURIER}/pkg/queue Queue,Segment
-
-pkg/stream/mocks/stream.go:
-	mockgen -package=mocks -destination=pkg/stream/mocks/stream.go ${PATH_COURIER}/pkg/stream Stream
-	$(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/stream/mocks/stream.go
+	mockgen -package=mocks -destination=pkg/queue/mocks/queue.go ${PATH_COURIER}/pkg/queue Queue
+	@ $(SED) 's/github.com\/trussle\/courier\/vendor\///g' ./pkg/queue/mocks/queue.go
 
 .PHONY: build-mocks
 build-mocks: FORCE
-	$(MAKE) pkg/metrics/mocks/metrics.go
-	$(MAKE) pkg/metrics/mocks/observer.go
-	$(MAKE) pkg/queue/mocks/queue.go
-	$(MAKE) pkg/stream/mocks/stream.go
+	@ $(MAKE) pkg/audit/mocks/log.go
+	@ $(MAKE) pkg/cache/cluster/mocks/peer.go
+	@ $(MAKE) pkg/cache/members/mocks/members.go
+	@ $(MAKE) pkg/cache/mocks/log.go
+	@ $(MAKE) pkg/metrics/mocks/metrics.go
+	@ $(MAKE) pkg/metrics/mocks/observer.go
+	@ $(MAKE) pkg/models/mocks/record.go
+	@ $(MAKE) pkg/models/mocks/transaction.go
+	@ $(MAKE) pkg/queue/mocks/queue.go
 
 .PHONY: clean-mocks
 clean-mocks: FORCE
+	rm -f pkg/audit/mocks/log.go
+	rm -f pkg/cache/cluster/mocks/peer.go
+	rm -f pkg/cache/members/mocks/members.go
+	rm -f pkg/cache/mocks/log.go
 	rm -f pkg/metrics/mocks/metrics.go
 	rm -f pkg/metrics/mocks/observer.go
+	rm -f pkg/models/mocks/record.go
+	rm -f pkg/models/mocks/transaction.go
 	rm -f pkg/queue/mocks/queue.go
-	rm -f pkg/stream/mocks/stream.go
 
 .PHONY: clean
 clean: FORCE

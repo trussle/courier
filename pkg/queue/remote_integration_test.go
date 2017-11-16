@@ -1,6 +1,6 @@
 // +build integration
 
-package queue
+package queue_test
 
 import (
 	"math/rand"
@@ -9,8 +9,7 @@ import (
 	"time"
 
 	"github.com/go-kit/kit/log"
-	"github.com/pkg/errors"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/courier/pkg/queue"
 )
 
 const (
@@ -26,22 +25,30 @@ func TestRemoteQueue_Integration(t *testing.T) {
 
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	config, err := BuildConfig(
-		WithEC2Role(false),
-		WithRegion(GetEnv("AWS_REGION", defaultAWSRegion)),
-		WithID(GetEnv("AWS_ID", defaultAWSID)),
-		WithSecret(GetEnv("AWS_SECRET", defaultAWSSecret)),
-		WithToken(GetEnv("AWS_TOKEN", defaultAWSToken)),
-		WithQueue(GetEnv("AWS_SQS_QUEUE", defaultAWSQueue)),
-		WithMaxNumberOfMessages(10),
-		WithVisibilityTimeout(time.Second*100),
+	remoteConfig, err := queue.BuildConfig(
+		queue.WithEC2Role(false),
+		queue.WithRegion(GetEnv("AWS_REGION", defaultAWSRegion)),
+		queue.WithID(GetEnv("AWS_ID", defaultAWSID)),
+		queue.WithSecret(GetEnv("AWS_SECRET", defaultAWSSecret)),
+		queue.WithToken(GetEnv("AWS_TOKEN", defaultAWSToken)),
+		queue.WithQueue(GetEnv("AWS_SQS_QUEUE", defaultAWSQueue)),
+		queue.WithMaxNumberOfMessages(1),
+		queue.WithVisibilityTimeout(time.Second*100),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := queue.Build(
+		queue.With("remote"),
+		queue.WithConfig(remoteConfig),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Run("new", func(t *testing.T) {
-		queue, err := NewRemoteQueue(config, log.NewNopLogger())
+		queue, err := queue.New(config, log.NewNopLogger())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -52,231 +59,137 @@ func TestRemoteQueue_Integration(t *testing.T) {
 	})
 
 	t.Run("enqueue a value", func(t *testing.T) {
-		queue, err := NewRemoteQueue(config, log.NewNopLogger())
+		remote, err := queue.New(config, log.NewNopLogger())
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		rec := Record{
-			ID:   uuid.MustNew(rnd),
-			Body: []byte("hello, world!"),
+		rec, err := queue.GenerateQueueRecord(rnd)
+		if err != nil {
+			t.Fatal(err)
 		}
 
-		err = queue.Enqueue(rec)
+		err = remote.Enqueue(rec)
 		if expected, actual := true, err == nil; expected != actual {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
 	})
 
 	t.Run("dequeue a value", func(t *testing.T) {
-		queue, err := NewRemoteQueue(config, log.NewNopLogger())
+		remote, err := queue.New(config, log.NewNopLogger())
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		enqueueSegment(t, rnd, queue, "hello, world!")
-
-		segment, err := queue.Dequeue()
+		rec, err := queue.GenerateQueueRecord(rnd)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if expected, actual := false, segment.ID().Zero(); expected != actual {
+		if err := remote.Enqueue(rec); err != nil {
+			t.Fatal(err)
+		}
+
+		records, err := remote.Dequeue()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if expected, actual := 1, len(records); expected > actual {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
 
-		size := segment.Size()
-		if expected, actual := 1, size; actual < expected {
-			t.Errorf("expected: %d, actual: %d", expected, actual)
-		}
-
-		var ids []uuid.UUID
-		segment.Walk(func(r Record) error {
-			ids = append(ids, r.ID)
-			return nil
-		})
-
-		if _, err = segment.Commit(ids); err != nil {
-			t.Error(err)
-		}
-	})
-
-	t.Run("dequeue size after walk should be grater than 1", func(t *testing.T) {
-		queue, err := NewRemoteQueue(config, log.NewNopLogger())
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		body := "hello, world!"
-		enqueueSegment(t, rnd, queue, body)
-
-		segment, err := queue.Dequeue()
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if expected, actual := false, segment.ID().Zero(); actual != expected {
-			t.Errorf("expected: %t, actual: %t", expected, actual)
-		}
-
-		var ids []uuid.UUID
-		err = segment.Walk(func(r Record) error {
-			ids = append(ids, r.ID)
-
-			if expected, actual := 0, len(r.Body); actual == expected {
-				t.Errorf("expected: %d, actual: %d", expected, actual)
+		for _, res := range records {
+			if expected, actual := false, res.ID().Zero(); expected != actual {
+				t.Errorf("expected: %t, actual: %t", expected, actual)
 			}
-			return nil
-		})
-		if err != nil {
-			t.Error(err)
-		}
-
-		size := segment.Size()
-		if expected, actual := 1, size; actual < expected {
-			t.Errorf("expected: %d, actual: %d", expected, actual)
-		}
-
-		if _, err = segment.Commit(ids); err != nil {
-			t.Error(err)
 		}
 	})
 
-	t.Run("enqueue multiple then dequeue and walk after failure", func(t *testing.T) {
-		queue, err := NewRemoteQueue(config, log.NewNopLogger())
+	t.Run("dequeue a value and commit", func(t *testing.T) {
+		remote, err := queue.New(config, log.NewNopLogger())
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		body := "hello, world!"
-		for i := 0; i < 10; i++ {
-			enqueueSegment(t, rnd, queue, body)
-		}
-
-		segment, err := queue.Dequeue()
+		rec, err := queue.GenerateQueueRecord(rnd)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		size0 := segment.Size()
-		if size0 == 0 {
-			t.Skip("Nothing to test in this zero scenario")
-			return
+		if err := remote.Enqueue(rec); err != nil {
+			t.Fatal(err)
 		}
 
-		err = segment.Walk(func(r Record) error {
-			if expected, actual := 0, len(r.Body); actual == expected {
-				t.Errorf("expected: %d, actual: %d", expected, actual)
+		records, err := remote.Dequeue()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if expected, actual := 1, len(records); expected > actual {
+			t.Errorf("expected: %t, actual: %t", expected, actual)
+		}
+
+		txn := queue.NewTransaction()
+		for _, res := range records {
+			if err := txn.Push(res.ID(), res); err != nil {
+				t.Fatal(err)
 			}
-			return errors.New("bad")
-		})
-		if err == nil {
-			t.Fatalf("expected error, received nil")
 		}
 
-		size1 := segment.Size()
-		if expected, actual := size0, size1; expected != actual {
+		result, err := remote.Commit(txn)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if expected, actual := txn.Len(), result.Success; expected != actual {
 			t.Errorf("expected: %d, actual: %d", expected, actual)
 		}
-
-		var ids []uuid.UUID
-		segment.Walk(func(r Record) error {
-			ids = append(ids, r.ID)
-			return nil
-		})
-		if _, err = segment.Commit(ids); err != nil {
-			t.Error(err)
-		}
-	})
-
-	t.Run("change visibility with no records", func(t *testing.T) {
-		queue, err := newRemoteQueue(config, log.NewNopLogger())
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = queue.changeMessageVisibility(make(Records, 0))
-		if expected, actual := true, err == nil; actual != expected {
-			t.Errorf("expected: %t, actual: %t", expected, actual)
-		}
-	})
-
-	t.Run("change visibility with no timeout", func(t *testing.T) {
-		config, err := BuildConfig(
-			WithEC2Role(false),
-			WithRegion(GetEnv("AWS_REGION", defaultAWSRegion)),
-			WithID(GetEnv("AWS_ID", defaultAWSID)),
-			WithSecret(GetEnv("AWS_SECRET", defaultAWSSecret)),
-			WithToken(GetEnv("AWS_TOKEN", defaultAWSToken)),
-			WithQueue(GetEnv("AWS_SQS_QUEUE", defaultAWSQueue)),
-			WithMaxNumberOfMessages(10),
-			WithVisibilityTimeout(0),
-		)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		queue, err := newRemoteQueue(config, log.NewNopLogger())
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		recs := make(Records, 1)
-		recs.Append(Record{})
-
-		err = queue.changeMessageVisibility(recs)
-		if expected, actual := true, err == nil; actual != expected {
-			t.Errorf("expected: %t, actual: %t", expected, actual)
-		}
-	})
-
-	t.Run("commit with no records", func(t *testing.T) {
-		queue, err := newRemoteQueue(config, log.NewNopLogger())
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		segment := newRealSegment(uuid.MustNew(rnd), queue, make([]Record, 0), log.NewNopLogger())
-
-		_, err = segment.Commit(make([]uuid.UUID, 0))
-		if expected, actual := true, err == nil; actual != expected {
-			t.Errorf("expected: %t, actual: %t", expected, actual)
-		}
-		if expected, actual := 0, segment.Size(); expected != actual {
+		if expected, actual := 0, result.Failure; expected != actual {
 			t.Errorf("expected: %d, actual: %d", expected, actual)
 		}
 	})
 
-	t.Run("failed with no records", func(t *testing.T) {
-		queue, err := newRemoteQueue(config, log.NewNopLogger())
+	t.Run("dequeue a value and failed", func(t *testing.T) {
+		remote, err := queue.New(config, log.NewNopLogger())
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		segment := newRealSegment(uuid.MustNew(rnd), queue, make([]Record, 0), log.NewNopLogger())
+		rec, err := queue.GenerateQueueRecord(rnd)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-		_, err = segment.Failed(make([]uuid.UUID, 0))
-		if expected, actual := true, err == nil; actual != expected {
+		if err := remote.Enqueue(rec); err != nil {
+			t.Fatal(err)
+		}
+
+		records, err := remote.Dequeue()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if expected, actual := 1, len(records); expected > actual {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
-		if expected, actual := 0, segment.Size(); expected != actual {
+
+		txn := queue.NewTransaction()
+		for _, res := range records {
+			if err := txn.Push(res.ID(), res); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		result, err := remote.Failed(txn)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if expected, actual := len(records), result.Success; expected != actual {
 			t.Errorf("expected: %d, actual: %d", expected, actual)
 		}
-	})
-
-	t.Run("failed with some records", func(t *testing.T) {
-		queue, err := newRemoteQueue(config, log.NewNopLogger())
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		segment := newRealSegment(uuid.MustNew(rnd), queue, make([]Record, 1), log.NewNopLogger())
-
-		_, err = segment.Failed(make([]uuid.UUID, 0))
-		if expected, actual := true, err == nil; actual != expected {
-			t.Errorf("expected: %t, actual: %t", expected, actual)
-		}
-		if expected, actual := 0, segment.Size(); expected != actual {
+		if expected, actual := 0, result.Failure; expected != actual {
 			t.Errorf("expected: %d, actual: %d", expected, actual)
 		}
 	})

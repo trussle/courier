@@ -4,9 +4,9 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	errs "github.com/trussle/courier/pkg/http"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	errs "github.com/trussle/courier/pkg/http"
 )
 
 // These are the status API URL paths.

@@ -1,22 +1,22 @@
 package queue
 
-import "github.com/trussle/courier/pkg/uuid"
+import "github.com/trussle/courier/pkg/models"
 
 type nopQueue struct{}
 
-// NewNopQueue has methods that always succeed, but do nothing.
-func NewNopQueue() Queue {
-	return nopQueue{}
+func newNopQueue() Queue {
+	return &nopQueue{}
 }
 
-func (q nopQueue) Enqueue(Record) error      { return nil }
-func (q nopQueue) Dequeue() (Segment, error) { return nopSegment{}, nil }
-func (q nopQueue) Reset() error              { return nil }
+func (nopQueue) Enqueue(models.Record) error       { return nil }
+func (nopQueue) Dequeue() ([]models.Record, error) { return make([]models.Record, 0), nil }
 
-type nopSegment struct{}
+func (nopQueue) Run()  {}
+func (nopQueue) Stop() {}
 
-func (v nopSegment) ID() uuid.UUID                      { return uuid.Empty }
-func (v nopSegment) Commit([]uuid.UUID) (Result, error) { return Result{0, 0}, nil }
-func (v nopSegment) Failed([]uuid.UUID) (Result, error) { return Result{0, 0}, nil }
-func (v nopSegment) Size() int                          { return 0 }
-func (v nopSegment) Walk(func(Record) error) error      { return nil }
+func (nopQueue) Commit(txn models.Transaction) (Result, error) {
+	return Result{txn.Len(), 0}, nil
+}
+func (nopQueue) Failed(txn models.Transaction) (Result, error) {
+	return Result{txn.Len(), 0}, nil
+}

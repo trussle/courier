@@ -14,10 +14,14 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/trussle/courier/pkg/harness"
 	"github.com/trussle/courier/pkg/queue"
 	"github.com/trussle/courier/pkg/status"
-	"github.com/trussle/courier/pkg/uuid"
+)
+
+const (
+	defaultBroadcast = true
 )
 
 func runHarness(args []string) error {
@@ -28,11 +32,16 @@ func runHarness(args []string) error {
 		debug   = flags.Bool("debug", false, "debug logging")
 		apiAddr = flags.String("api", defaultAPIAddr, "listen address for harness API")
 
+		awsEC2Role  = flags.Bool("aws.ec2.role", defaultEC2Role, "AWS configuration to use EC2 roles")
 		awsID       = flags.String("aws.id", defaultAWSID, "AWS configuration id")
 		awsSecret   = flags.String("aws.secret", defaultAWSSecret, "AWS configuration secret")
 		awsToken    = flags.String("aws.token", defaultAWSToken, "AWS configuration token")
 		awsRegion   = flags.String("aws.region", defaultAWSRegion, "AWS configuration region")
 		awsSQSQueue = flags.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
+
+		broadcast = flags.Bool("broadcast", defaultBroadcast, "broadcast new records")
+
+		metricsRegistration = flags.Bool("metrics.registration", defaultMetricsRegistration, "Registration of metrics on launch")
 	)
 
 	flags.Usage = usageFor(flags, "harness [flags]")
@@ -52,6 +61,25 @@ func runHarness(args []string) error {
 		logger = level.NewFilter(logger, logLevel)
 	}
 
+	// Instrumentation
+	connectedClients := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "courier_transformer",
+		Name:      "connected_clients",
+		Help:      "Number of currently connected clients by modality.",
+	}, []string{"modality"})
+	apiDuration := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "courier_transformer",
+		Name:      "api_request_duration_seconds",
+		Help:      "API request duration in seconds.",
+		Buckets:   prometheus.DefBuckets,
+	}, []string{"method", "path", "status_code"})
+	if *metricsRegistration {
+		prometheus.MustRegister(
+			connectedClients,
+			apiDuration,
+		)
+	}
+
 	apiNetwork, apiAddress, err := parseAddr(*apiAddr, defaultAPIPort)
 	if err != nil {
 		return err
@@ -64,6 +92,7 @@ func runHarness(args []string) error {
 
 	// Configuration for the queue
 	remoteConfig, err := queue.BuildConfig(
+		queue.WithEC2Role(*awsEC2Role),
 		queue.WithID(*awsID),
 		queue.WithSecret(*awsSecret),
 		queue.WithToken(*awsToken),
@@ -82,7 +111,7 @@ func runHarness(args []string) error {
 		return errors.Wrap(err, "queue config")
 	}
 
-	var g gexec.Group
+	g := gexec.NewGroup()
 	gexec.Block(g)
 	{
 		q, err := queue.New(queueConfig, log.With(logger, "component", "queue"))
@@ -90,8 +119,10 @@ func runHarness(args []string) error {
 			return err
 		}
 
-		step := time.NewTicker(10 * time.Millisecond)
-		stop := make(chan chan struct{})
+		var (
+			step = time.NewTicker(500 * time.Millisecond)
+			stop = make(chan chan struct{})
+		)
 
 		rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -99,12 +130,15 @@ func runHarness(args []string) error {
 			for {
 				select {
 				case <-step.C:
+					if !*broadcast {
+						continue
+					}
+
 					level.Info(logger).Log("state", "enqueuing")
 
-					payload := fmt.Sprintf("Ping-%s", time.Now().Format(time.RFC3339))
-					rec := queue.Record{
-						ID:   uuid.MustNew(rnd),
-						Body: []byte(payload),
+					rec, err := queue.GenerateQueueRecord(rnd)
+					if err != nil {
+						continue
 					}
 					if err := q.Enqueue(rec); err != nil {
 						level.Error(logger).Log("state", "enqueue failure", "err", err)
@@ -133,6 +167,8 @@ func runHarness(args []string) error {
 			))
 			mux.Handle("/status/", http.StripPrefix("/status", status.NewAPI(
 				log.With(logger, "component", "status_api"),
+				connectedClients.WithLabelValues("ingest"),
+				apiDuration,
 			)))
 
 			registerMetrics(mux)

@@ -1,7 +1,6 @@
 package queue
 
 import (
-	"math/rand"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -13,7 +12,8 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/courier/pkg/models"
+	"github.com/trussle/uuid"
 )
 
 // RemoteConfig creates a configuration to create a RemoteQueue.
@@ -31,16 +31,12 @@ type remoteQueue struct {
 	maxNumberOfMessages *int64
 	waitTime            *int64
 	visibilityTimeout   *int64
-	randSource          *rand.Rand
+	stop                chan chan struct{}
+	records             chan models.Record
 	logger              log.Logger
 }
 
-// NewRemoteQueue creates a new remote peer that abstracts over a SQS queue.
-func NewRemoteQueue(config *RemoteConfig, logger log.Logger) (Queue, error) {
-	return newRemoteQueue(config, logger)
-}
-
-func newRemoteQueue(config *RemoteConfig, logger log.Logger) (*remoteQueue, error) {
+func newRemoteQueue(config *RemoteConfig, logger log.Logger) (Queue, error) {
 	// If in EC2Role, attempt to get things from env or ec2role, else just use
 	// static credentials...
 	var creds *credentials.Credentials
@@ -85,199 +81,160 @@ func newRemoteQueue(config *RemoteConfig, logger log.Logger) (*remoteQueue, erro
 		queueURL:            queueURL.QueueUrl,
 		maxNumberOfMessages: aws.Int64(config.MaxNumberOfMessages),
 		visibilityTimeout:   aws.Int64(int64(config.VisibilityTimeout)),
-		randSource:          rand.New(rand.NewSource(time.Now().UnixNano())),
+		stop:                make(chan chan struct{}),
+		records:             make(chan models.Record),
 		logger:              logger,
 	}, nil
 }
 
-func (q *remoteQueue) Enqueue(r Record) error {
+func (v *remoteQueue) Enqueue(rec models.Record) error {
 	input := &sqs.SendMessageInput{
-		MessageBody: aws.String(string(r.Body)),
-		QueueUrl:    q.queueURL,
+		MessageBody: aws.String(string(rec.Body())),
+		QueueUrl:    v.queueURL,
 	}
-	_, err := q.client.SendMessage(input)
+	_, err := v.client.SendMessage(input)
 	return err
 }
 
-func (q *remoteQueue) Dequeue() (Segment, error) {
+func (v *remoteQueue) Dequeue() ([]models.Record, error) {
 	input := &sqs.ReceiveMessageInput{
-		QueueUrl:            q.queueURL,
-		MaxNumberOfMessages: q.maxNumberOfMessages,
+		QueueUrl:            v.queueURL,
+		MaxNumberOfMessages: v.maxNumberOfMessages,
 		MessageAttributeNames: []*string{
 			aws.String("All"),
 		},
-		WaitTimeSeconds: q.waitTime,
+		WaitTimeSeconds: v.waitTime,
 	}
 
-	resp, err := q.client.ReceiveMessage(input)
+	resp, err := v.client.ReceiveMessage(input)
 	if err != nil {
-		return nil, err
+		return make([]models.Record, 0), err
 	}
 
-	records := make(Records, len(resp.Messages))
-	for k, v := range resp.Messages {
-		id, e := uuid.New(q.randSource)
+	unique := make([]models.Record, len(resp.Messages))
+	for k, msg := range resp.Messages {
+		id, e := uuid.New()
 		if e != nil {
-			return nil, e
+			continue
 		}
 
-		records[k] = Record{
-			ID:        id,
-			MessageID: aws.StringValue(v.MessageId),
-			Receipt:   aws.StringValue(v.ReceiptHandle),
-			Body:      []byte(aws.StringValue(v.Body)),
-			Timestamp: time.Now(),
+		unique[k] = NewRecord(
+			id,
+			aws.StringValue(msg.MessageId),
+			models.Receipt(aws.StringValue(msg.ReceiptHandle)),
+			[]byte(aws.StringValue(msg.Body)),
+			time.Now(),
+		)
+	}
+
+	if err := v.changeMessageVisibility(unique); err != nil {
+		// Don't return, just continue, let's see what happens.
+		level.Warn(v.logger).Log("action", "run", "err", err)
+	}
+
+	return unique, nil
+}
+
+type keyValue struct {
+	Key   uuid.UUID
+	Value models.Receipt
+}
+
+func (v *remoteQueue) Commit(txn models.Transaction) (Result, error) {
+	records := make(map[uuid.UUID]models.Receipt)
+	if err := txn.Walk(func(id uuid.UUID, record models.Record) error {
+		records[id] = record.Receipt()
+		return nil
+	}); err != nil {
+		return Result{}, err
+	}
+
+	// chunk into 10 at a time because of the limitations of AWS
+	var (
+		i, index int
+		parts    = make([][]keyValue, int((float64(len(records))/9)+0.9))
+	)
+	for id, receipt := range records {
+		parts[index] = append(parts[index], keyValue{
+			Key:   id,
+			Value: receipt,
+		})
+		index = (i / 9)
+		i++
+	}
+
+	var result Result
+	for _, part := range parts {
+
+		entities := make([]*sqs.DeleteMessageBatchRequestEntry, len(records))
+		for i, kv := range part {
+			entities[i] = &sqs.DeleteMessageBatchRequestEntry{
+				Id:            aws.String(kv.Key.String()),
+				ReceiptHandle: aws.String(kv.Value.String()),
+			}
 		}
+
+		input := &sqs.DeleteMessageBatchInput{
+			Entries:  entities,
+			QueueUrl: v.queueURL,
+		}
+
+		output, err := v.client.DeleteMessageBatch(input)
+		if err != nil {
+			return Result{}, err
+		}
+
+		result.Success += len(output.Successful)
+		result.Failure += len(output.Failed)
 	}
 
-	if err = q.changeMessageVisibility(records); err != nil {
-		return nil, err
-	}
-
-	id, err := uuid.New(q.randSource)
-	if err != nil {
-		return nil, err
-	}
-
-	return newRealSegment(
-		id,
-		q,
-		records,
-		log.With(q.logger, "component", "read_segment"),
-	), nil
+	return result, nil
 }
 
-func (q *remoteQueue) Reset() error {
-	input := &sqs.PurgeQueueInput{
-		QueueUrl: q.queueURL,
-	}
-
-	_, err := q.client.PurgeQueue(input)
-	return err
+func (v *remoteQueue) Failed(txn models.Transaction) (Result, error) {
+	// TODO: Send to a failure queue.
+	return Result{
+		Success: txn.Len(),
+		Failure: 0,
+	}, nil
 }
 
-func (q *remoteQueue) changeMessageVisibility(records Records) error {
+func (v *remoteQueue) changeMessageVisibility(records []models.Record) error {
 	// fast exit
-	if records.Len() == 0 {
+	if len(records) == 0 {
 		return nil
 	}
 
 	var (
-		timeout = *q.visibilityTimeout
+		timeout = *v.visibilityTimeout
 		seconds = time.Duration(timeout) / time.Second
 	)
 	if timeout == 0 || seconds <= 0 {
 		return nil
 	}
 
-	entries := make([]*sqs.ChangeMessageVisibilityBatchRequestEntry, records.Len())
+	entries := make([]*sqs.ChangeMessageVisibilityBatchRequestEntry, len(records))
 	for k, v := range records {
 		entries[k] = &sqs.ChangeMessageVisibilityBatchRequestEntry{
-			Id:                aws.String(v.ID.String()),
-			ReceiptHandle:     aws.String(v.Receipt),
+			Id:                aws.String(v.ID().String()),
+			ReceiptHandle:     aws.String(v.Receipt().String()),
 			VisibilityTimeout: aws.Int64(int64(seconds)),
 		}
 	}
 
 	input := &sqs.ChangeMessageVisibilityBatchInput{
 		Entries:  entries,
-		QueueUrl: q.queueURL,
+		QueueUrl: v.queueURL,
 	}
-	output, err := q.client.ChangeMessageVisibilityBatch(input)
+	output, err := v.client.ChangeMessageVisibilityBatch(input)
 	if err != nil {
-		level.Warn(q.logger).Log("state", "visibility change", "err", err)
+		level.Warn(v.logger).Log("state", "visibility change", "err", err)
 		return err
 	}
 	if num := len(output.Failed); num > 0 {
-		level.Warn(q.logger).Log("state", "visibility change", "failed", num)
+		level.Warn(v.logger).Log("state", "visibility change", "failed", num)
 	}
 	return nil
-}
-
-type realSegment struct {
-	id      uuid.UUID
-	queue   *remoteQueue
-	records []Record
-	read    []Record
-	logger  log.Logger
-}
-
-func newRealSegment(
-	id uuid.UUID,
-	queue *remoteQueue,
-	records []Record,
-	logger log.Logger,
-) Segment {
-	return &realSegment{
-		id:      id,
-		queue:   queue,
-		records: records,
-		logger:  logger,
-	}
-}
-
-func (r *realSegment) ID() uuid.UUID {
-	return r.id
-}
-
-func (r *realSegment) Walk(fn func(r Record) error) (err error) {
-	for _, rec := range r.records {
-		if err = fn(rec); err != nil {
-			break
-		}
-	}
-	return
-}
-
-func (r *realSegment) Commit(ids []uuid.UUID) (Result, error) {
-	if len(r.records) == 0 {
-		return Result{0, 0}, nil
-	}
-
-	res, records := transactIDs(r.records, ids)
-
-	entities := make([]*sqs.DeleteMessageBatchRequestEntry, len(records))
-	for k, v := range records {
-		entities[k] = &sqs.DeleteMessageBatchRequestEntry{
-			Id:            aws.String(v.ID.String()),
-			ReceiptHandle: aws.String(v.Receipt),
-		}
-	}
-
-	input := &sqs.DeleteMessageBatchInput{
-		Entries:  entities,
-		QueueUrl: r.queue.queueURL,
-	}
-	output, err := r.queue.client.DeleteMessageBatch(input)
-	if err != nil {
-		return Result{0, 0}, err
-	}
-
-	if size := len(output.Failed); size > 0 {
-		level.Warn(r.logger).Log("failed_size", size)
-		// There is nothing we can do here, other than allow the queue to resend
-		// them at a further time.
-	}
-
-	// Reset the records when done
-	r.records = r.records[:0]
-
-	return res, nil
-}
-
-func (r *realSegment) Failed(ids []uuid.UUID) (Result, error) {
-	if len(r.records) == 0 {
-		return Result{0, 0}, nil
-	}
-
-	// Nothing to do, but to reset everything.
-	res, _ := transactIDs(r.records, ids)
-	r.records = r.records[:0]
-	return res, nil
-}
-
-func (r *realSegment) Size() int {
-	return len(r.records)
 }
 
 // ConfigOption defines a option for generating a RemoteConfig

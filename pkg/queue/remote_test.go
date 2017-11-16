@@ -1,13 +1,11 @@
 package queue
 
 import (
-	"math/rand"
 	"testing"
 	"testing/quick"
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/trussle/courier/pkg/uuid"
 )
 
 func TestConfigBuild(t *testing.T) {
@@ -53,19 +51,4 @@ func TestConfigBuild(t *testing.T) {
 			t.Errorf("expected: %t, actual: %t", expected, actual)
 		}
 	})
-}
-
-func enqueueSegment(t *testing.T, rnd *rand.Rand, queue Queue, body string) uuid.UUID {
-	id := uuid.MustNew(rnd)
-
-	rec := Record{
-		ID:   id,
-		Body: []byte(body),
-	}
-
-	if err := queue.Enqueue(rec); err != nil {
-		t.Fatal(err)
-	}
-
-	return id
 }

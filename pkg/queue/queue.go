@@ -3,78 +3,32 @@ package queue
 import (
 	"strings"
 
-	"github.com/trussle/courier/pkg/uuid"
 	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
+	"github.com/trussle/courier/pkg/models"
 )
 
-// Queue is an abstraction for segments on an ingest node.
+// Queue represents a series of records
+// The queue's underlying backing store is a constructed from a channel, so it
+// blocks if no body dequeues any items.
 type Queue interface {
+	// Enqueue a record
+	Enqueue(models.Record) error
 
-	// Enqueue returns a new segment that can be written to.
-	Enqueue(Record) error
+	// Dequeue a record from the channel
+	Dequeue() ([]models.Record, error)
 
-	// Dequeue returns the first segment, which can then be read from.
-	Dequeue() (Segment, error)
+	// Commit a transaction containing the records, so that an ack can be sent
+	Commit(models.Transaction) (Result, error)
 
-	// Reset clears the queue, note all information will be lost. If it can't
-	// clear the queue or there is an error performing reset then an error will
-	// be returned.
-	Reset() error
+	// Failed a transaction containing the records, so that potential retries can
+	// be used.
+	Failed(models.Transaction) (Result, error)
 }
 
-// Segment is a segment that can be read from. Once read, it may be
-// committed and thus deleted. Or it may be failed, and made available for
-// selection again.
-type Segment interface {
-
-	// Unique ID of the segment
-	ID() uuid.UUID
-
-	// Walk over the records in the segment.
-	Walk(func(Record) error) error
-
-	// Commit attempts to to commit a read segment or fails on error
-	Commit([]uuid.UUID) (Result, error)
-
-	// Failed notifies the read segment or fails with an error
-	Failed([]uuid.UUID) (Result, error)
-
-	// Size gets the size of the read segment.
-	Size() int
-}
-
-// Result represents how many items where successful, unsuccessful when
-// transacting
+// Result returns the amount of successes and failures
 type Result struct {
-	Successful, Unsuccessful int
-}
-
-type noSegmentsAvailable interface {
-	NoSegmentsAvailable() bool
-}
-
-type errNoSegmentsAvailable struct {
-	err error
-}
-
-func (e errNoSegmentsAvailable) Error() string {
-	return e.err.Error()
-}
-
-func (e errNoSegmentsAvailable) NoSegmentsAvailable() bool {
-	return true
-}
-
-// ErrNoSegmentsAvailable tests to see if the error passed if no segments are
-// available
-func ErrNoSegmentsAvailable(err error) bool {
-	if err != nil {
-		if _, ok := err.(noSegmentsAvailable); ok {
-			return true
-		}
-	}
-	return false
+	Success, Failure int
 }
 
 // Config encapsulates the requirements for generating a Queue
@@ -119,15 +73,15 @@ func WithConfig(remoteConfig *RemoteConfig) Option {
 func New(config *Config, logger log.Logger) (queue Queue, err error) {
 	switch strings.ToLower(config.name) {
 	case "remote":
-		queue, err = NewRemoteQueue(config.remoteConfig, logger)
+		queue, err = newRemoteQueue(config.remoteConfig, logger)
 		if err != nil {
 			err = errors.Wrap(err, "remote queue")
 			return
 		}
 	case "virtual":
-		queue = NewVirtualQueue()
+		queue = newVirtualQueue()
 	case "nop":
-		queue = NewNopQueue()
+		queue = newNopQueue()
 	default:
 		err = errors.Errorf("unexpected fs type %q", config.name)
 	}

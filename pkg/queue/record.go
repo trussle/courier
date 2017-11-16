@@ -1,90 +1,106 @@
 package queue
 
 import (
+	"fmt"
 	"math/rand"
 	"reflect"
 	"time"
 
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/courier/pkg/models"
+	"github.com/trussle/uuid"
 )
 
-// Record represents a message from a SQS queue that contains a unique ID, along
-// with a SQS receipt handler and the body of the message.
-// - ID is a unique id for the whole record
-// - MessageID is unique for a queue
-// It's import to understand the difference between ID and MessageID. The
-// former is unique even if the same message is pulled.
-type Record struct {
-	ID        uuid.UUID
-	MessageID string
-	Receipt   string
-	Body      []byte
-	Timestamp time.Time
+type queueRecord struct {
+	id         uuid.UUID
+	messageID  string
+	receipt    models.Receipt
+	body       []byte
+	receivedAt time.Time
 }
 
-// Equals checks the equality of records against each other
-func (r Record) Equals(other Record) bool {
-	return r.ID.Equals(other.ID) &&
-		reflect.DeepEqual(r.Body, other.Body)
+// NewRecord is a default queue record implementation
+func NewRecord(id uuid.UUID,
+	messageID string,
+	receipt models.Receipt,
+	body []byte,
+	receivedAt time.Time,
+) models.Record {
+	return queueRecord{
+		id:         id,
+		messageID:  messageID,
+		receipt:    receipt,
+		body:       body,
+		receivedAt: receivedAt,
+	}
+}
+
+func (r queueRecord) ID() uuid.UUID           { return r.id }
+func (r queueRecord) Receipt() models.Receipt { return r.receipt }
+func (r queueRecord) RecordID() string        { return r.messageID }
+func (r queueRecord) Body() []byte            { return r.body }
+
+func (r queueRecord) Equal(other models.Record) bool {
+	return r.ID().Equals(other.ID()) &&
+		reflect.DeepEqual(r.Body(), other.Body())
+}
+
+func (r queueRecord) Commit(txn models.Transaction) error {
+	return txn.Push(r.id, r)
+}
+
+func (r queueRecord) Failed(txn models.Transaction) error {
+	return txn.Push(r.id, r)
 }
 
 // Generate allows UUID to be used within quickcheck scenarios.
-func (Record) Generate(r *rand.Rand, size int) reflect.Value {
-	rec, err := generate(r)
+func (queueRecord) Generate(r *rand.Rand, size int) reflect.Value {
+	rec, err := GenerateQueueRecord(r)
 	if err != nil {
 		panic(err)
 	}
 	return reflect.ValueOf(rec)
 }
 
-// Records represents a series of records that can be serialized and
-// de-serialized
-type Records []Record
+// GenerateQueueRecord creates a new queue record
+func GenerateQueueRecord(rnd *rand.Rand) (models.Record, error) {
+	var (
+		err error
+		rec = queueRecord{}
+	)
 
-// Append adds another record to the records slice
-func (r *Records) Append(rec Record) {
-	(*r) = append(*r, rec)
-}
-
-// Len returns the number of records with in the slice
-func (r *Records) Len() int {
-	return len(*r)
-}
-
-func generate(rnd *rand.Rand) (rec Record, err error) {
-	if rec.ID, err = uuid.New(rnd); err != nil {
-		return
+	if rec.id, err = uuid.NewWithRand(rnd); err != nil {
+		return nil, err
 	}
 
 	// MessageID generation
 	{
 		dst := make([]byte, rnd.Intn(10)+20)
 		if _, err = rnd.Read(dst); err != nil {
-			return
+			return nil, err
 		}
-		rec.MessageID = string(dst)
+		rec.messageID = fmt.Sprintf("%X", dst)
 	}
 
 	// Receipt generation
 	{
 		dst := make([]byte, rnd.Intn(10)+24)
 		if _, err = rnd.Read(dst); err != nil {
-			return
+			return nil, err
 		}
-		rec.Receipt = string(dst)
+		rec.receipt = models.Receipt(fmt.Sprintf("%X", dst))
 	}
 
 	// Body generation
 	{
 		dst := make([]byte, rnd.Intn(10)+48)
 		if _, err = rnd.Read(dst); err != nil {
-			return
+			return nil, err
 		}
-		rec.Body = dst
+		rec.body = []byte(fmt.Sprintf("%X", dst))
 	}
 
 	// Timestamp generation
-	rec.Timestamp = time.Now().Round(time.Millisecond)
+	rec.receivedAt = time.Now().Round(time.Millisecond)
 
-	return
+	return rec, nil
 }

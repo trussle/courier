@@ -6,15 +6,20 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/trussle/courier/pkg/audit"
+	"github.com/trussle/courier/pkg/cache"
+	"github.com/trussle/courier/pkg/consumer/fifo"
 	"github.com/trussle/courier/pkg/http"
 	"github.com/trussle/courier/pkg/metrics"
+	"github.com/trussle/courier/pkg/models"
 	"github.com/trussle/courier/pkg/queue"
-	"github.com/trussle/courier/pkg/stream"
-	"github.com/trussle/courier/pkg/uuid"
+	"github.com/trussle/uuid"
 )
 
 const (
-	defaultWaitTime = time.Second
+	defaultActiveTargetSize = 10
+	defaultActiveTargetAge  = time.Minute
+	defaultWaitTime         = time.Millisecond * 100
 )
 
 // Consumer reads segments from the queue, and replicates merged segments to
@@ -25,14 +30,21 @@ type Consumer struct {
 	mutex              sync.Mutex
 	client             *http.Client
 	queue              queue.Queue
-	stream             stream.Stream
+	log                audit.Log
+	cache              cache.Cache
+	fifo               *fifo.FIFO
+	activeSince        time.Time
+	activeTargetAge    time.Duration
+	activeTargetSize   int
 	gatherErrors       int
+	waitTime           time.Duration
 	stop               chan chan struct{}
 	consumedSegments   metrics.Counter
 	consumedRecords    metrics.Counter
 	replicatedSegments metrics.Counter
 	replicatedRecords  metrics.Counter
-	gatherWaitTime     time.Duration
+	failedSegments     metrics.Counter
+	failedRecords      metrics.Counter
 	logger             log.Logger
 }
 
@@ -40,31 +52,43 @@ type Consumer struct {
 func New(
 	client *http.Client,
 	queue queue.Queue,
-	stream stream.Stream,
+	log audit.Log,
+	cache cache.Cache,
 	consumedSegments, consumedRecords metrics.Counter,
 	replicatedSegments, replicatedRecords metrics.Counter,
+	failedSegments, failedRecords metrics.Counter,
 	logger log.Logger,
 ) *Consumer {
-	return &Consumer{
+	consumer := &Consumer{
 		mutex:              sync.Mutex{},
 		client:             client,
 		queue:              queue,
-		stream:             stream,
+		log:                log,
+		cache:              cache,
+		activeSince:        time.Time{},
+		activeTargetAge:    defaultActiveTargetAge,
+		activeTargetSize:   defaultActiveTargetSize,
 		gatherErrors:       0,
+		waitTime:           defaultWaitTime,
 		stop:               make(chan chan struct{}),
 		consumedSegments:   consumedSegments,
 		consumedRecords:    consumedRecords,
 		replicatedSegments: replicatedSegments,
 		replicatedRecords:  replicatedRecords,
-		gatherWaitTime:     defaultWaitTime,
+		failedSegments:     failedSegments,
+		failedRecords:      failedRecords,
 		logger:             logger,
 	}
+
+	consumer.fifo = fifo.NewFIFO(consumer.onElementEviction)
+
+	return consumer
 }
 
 // Run consumes segments from the queue, and replicates them to the endpoint.
 // Run returns when Stop is invoked.
 func (c *Consumer) Run() {
-	step := time.NewTicker(100 * time.Millisecond)
+	step := time.NewTicker(10 * time.Millisecond)
 	defer step.Stop()
 
 	state := c.gather
@@ -74,9 +98,7 @@ func (c *Consumer) Run() {
 			state = state()
 
 		case q := <-c.stop:
-			if err := c.stream.Failed(stream.All()); err != nil {
-				level.Warn(c.logger).Log("state", "stopping", "err", err)
-			}
+			c.fifo.Purge()
 			close(q)
 			return
 		}
@@ -95,16 +117,9 @@ func (c *Consumer) Stop() {
 type stateFn func() stateFn
 
 func (c *Consumer) gather() stateFn {
-	var (
-		base = log.With(c.logger, "state", "gather")
-		warn = level.Warn(base)
-	)
-
-	warn.Log("state", "gather")
-
 	// A naïve way to break out of the gather loop in atypical conditions.
 	if c.gatherErrors > 0 {
-		if c.stream.Len() == 0 {
+		if c.fifo.Len() == 0 {
 			// We didn't successfully consume any segments.
 			// Nothing to do but reset and try again.
 			c.gatherErrors = 0
@@ -116,81 +131,152 @@ func (c *Consumer) gather() stateFn {
 	}
 
 	// More typical exit clauses.
-	if c.stream.Capacity() {
+	var (
+		tooBig = c.fifo.Len() > c.activeTargetSize
+		tooOld = !c.activeSince.IsZero() && time.Since(c.activeSince) > c.activeTargetAge
+	)
+	if tooBig || tooOld {
 		return c.replicate
 	}
 
-	segment, err := c.queue.Dequeue()
+	// Dequeue
+	records, err := c.queue.Dequeue()
 	if err != nil {
-		// Normal, when the ingester has no more segments to give right now.
-		// after enough of these errors, we should replicate
-		warn.Log("reason", "dequeuing", "err", err)
 		c.gatherErrors++
 		return c.gather
 	}
 
-	if err := c.stream.Append(segment); err != nil {
-		warn.Log("reason", "appending records", "err", err)
-		c.gatherErrors++
-		return c.failure
+	if len(records) == 0 {
+		time.Sleep(c.waitTime)
+		return c.gather
 	}
 
+	// Find if any records have intersected with the cache records.
+	var (
+		values = make(map[string]models.Record)
+		idents = make([]string, len(records))
+	)
+
+	for k, v := range records {
+		id := v.RecordID()
+
+		values[id] = v
+		idents[k] = id
+	}
+
+	_, difference, err := c.cache.Intersection(idents)
+	if err != nil {
+		difference = idents
+	}
+
+	for _, unique := range difference {
+		if record, ok := values[unique]; ok {
+			c.fifo.Add(record.ID(), record)
+		}
+	}
+
+	c.activeSince = time.Now()
+
 	c.consumedSegments.Inc()
-	c.consumedRecords.Add(float64(segment.Size()))
+	c.consumedRecords.Add(float64(1))
 
 	return c.gather
 }
 
 func (c *Consumer) replicate() stateFn {
 	var (
-		base = log.With(c.logger, "state", "replicate")
-		warn = level.Warn(base)
+		base  = log.With(c.logger, "state", "replicate")
+		warn  = level.Warn(base)
+		debug = level.Debug(base)
 	)
 
-	replicated := stream.NewQuery()
+	if c.fifo.Len() == 0 {
+		warn.Log("action", "len", "reason", "len is zero")
+		return c.gather
+	}
 
-	// Replicate the records to the endpoint
-	if err := c.stream.Walk(func(segment queue.Segment) error {
-		var ids []uuid.UUID
+	// We want to replicate all things first
+	dequeued, err := c.fifo.Dequeue(func(key uuid.UUID, value models.Record) error {
+		debug.Log("action", "sending", "key", key.String())
+		return c.client.Send(value.Body())
+	})
 
-		err := segment.Walk(func(record queue.Record) error {
-			if err := c.client.Send(record.Body); err != nil {
-				return err
-			}
+	// even if we err out, we should send them in a transaction
+	if err := c.commit(dequeued); err != nil {
+		warn.Log("action", "commit", "err", err)
+	}
 
-			// Append only when replicated
-			ids = append(ids, record.ID)
-			return nil
-		})
-
-		// Replicate any IDs that was successful
-		replicated.Set(segment.ID(), ids[0:])
-		return err
-	}); err != nil {
-		warn.Log("state", "replicate", "err", err)
+	if err != nil {
+		warn.Log("action", "dequeue", "err", err)
 		return c.failure
 	}
 
-	// All good!
 	c.replicatedSegments.Inc()
-	c.replicatedRecords.Add(float64(replicated.Len()))
-
-	if err := c.stream.Commit(replicated); err != nil {
-		warn.Log("err", err)
-	}
+	c.replicatedRecords.Add(float64(len(dequeued)))
 
 	return c.gather
 }
 
 func (c *Consumer) failure() stateFn {
+	txn := queue.NewTransaction()
+	for _, v := range c.fifo.Slice() {
+		if err := txn.Push(v.Value.ID(), v.Value); err != nil {
+			continue
+		}
+	}
+	if _, err := c.queue.Failed(txn); err != nil {
+		level.Warn(c.logger).Log("state", "failure", "err", err)
+		goto PURGE
+	}
+
+	c.failedSegments.Inc()
+	c.failedRecords.Add(float64(txn.Len()))
+
+PURGE:
+	c.fifo.Purge()
+	return c.gather
+}
+
+func (c *Consumer) onElementEviction(reason fifo.EvictionReason, key uuid.UUID, value models.Record) {
+	// We should fail the transaction
+	switch reason {
+	case fifo.Dequeued:
+		// do nothing
+	default:
+		level.Warn(c.logger).Log("state", "eviction", "id", key.String(), "record", value.RecordID())
+	}
+}
+
+func (c *Consumer) commit(values []fifo.KeyValue) error {
 	var (
-		base = log.With(c.logger, "state", "failure")
+		base = log.With(c.logger, "state", "commit")
 		warn = level.Warn(base)
 	)
 
-	if err := c.stream.Failed(stream.All()); err != nil {
-		warn.Log("err", err)
+	txn := queue.NewTransaction()
+	for _, v := range values {
+		if err := txn.Push(v.Value.ID(), v.Value); err != nil {
+			continue
+		}
 	}
 
-	return c.gather
+	// Try and append to the audit log, if it fails do nothing but continue.
+	if err := c.log.Append(txn); err != nil {
+		// do nothing here, we tried!
+		warn.Log("state", "commit", "action", "log", "err", err)
+	}
+
+	if _, err := c.queue.Commit(txn); err != nil {
+		return err
+	}
+
+	idents := make([]string, len(values))
+	for k, v := range values {
+		idents[k] = v.Value.RecordID()
+	}
+	if err := c.cache.Add(idents); err != nil {
+		warn.Log("state", "commit", "action", "cache", "err", err)
+	}
+
+	return txn.Flush()
 }

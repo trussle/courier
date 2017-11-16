@@ -4,16 +4,16 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/trussle/courier/pkg/uuid"
-	"github.com/pkg/errors"
+	"github.com/golang/mock/gomock"
+	"github.com/trussle/courier/pkg/models/mocks"
 )
 
 func TestNopQueue(t *testing.T) {
 	t.Parallel()
 
 	t.Run("enqueue", func(t *testing.T) {
-		fn := func(r Record) bool {
-			queue := NewNopQueue()
+		fn := func(r queueRecord) bool {
+			queue := newNopQueue()
 			err := queue.Enqueue(r)
 			return err == nil
 		}
@@ -24,18 +24,18 @@ func TestNopQueue(t *testing.T) {
 	})
 
 	t.Run("dequeue", func(t *testing.T) {
-		fn := func(r Record) bool {
-			queue := NewNopQueue()
+		fn := func(r queueRecord) bool {
+			queue := newNopQueue()
+
 			if err := queue.Enqueue(r); err != nil {
 				t.Fatal(err)
 			}
 
-			s, err := queue.Dequeue()
+			res, err := queue.Dequeue()
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
 			}
-
-			return s.Size() == 0
+			return len(res) == 0
 		}
 
 		if err := quick.Check(fn, nil); err != nil {
@@ -43,87 +43,48 @@ func TestNopQueue(t *testing.T) {
 		}
 	})
 
-	t.Run("dequeue empty queue", func(t *testing.T) {
-		queue := NewNopQueue()
-		_, err := queue.Dequeue()
-		if expected, actual := true, err == nil; expected != actual {
-			t.Errorf("expected: %t, actual: %t", expected, actual)
+	t.Run("commit", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		queue := newNopQueue()
+		txn := mocks.NewMockTransaction(ctrl)
+
+		txn.EXPECT().Len().Return(0)
+
+		res, err := queue.Commit(txn)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if expected, actual := 0, res.Success; expected != actual {
+			t.Errorf("expected: %d, actual: %d", expected, actual)
+		}
+		if expected, actual := 0, res.Failure; expected != actual {
+			t.Errorf("expected: %d, actual: %d", expected, actual)
 		}
 	})
 
-	t.Run("dequeue then commit segment returns nil", func(t *testing.T) {
-		fn := func(r Record) bool {
-			queue := NewNopQueue()
-			if err := queue.Enqueue(r); err != nil {
-				t.Fatal(err)
-			}
+	t.Run("failure", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
 
-			s, err := queue.Dequeue()
-			if err != nil {
-				t.Fatal(err)
-			}
+		queue := newNopQueue()
 
-			_, err = s.Commit(make([]uuid.UUID, 0))
-			return err == nil
+		txn := mocks.NewMockTransaction(ctrl)
+
+		txn.EXPECT().Len().Return(0)
+
+		res, err := queue.Failed(txn)
+		if err != nil {
+			t.Fatal(err)
 		}
 
-		if err := quick.Check(fn, nil); err != nil {
-			t.Error(err)
+		if expected, actual := 0, res.Success; expected != actual {
+			t.Errorf("expected: %d, actual: %d", expected, actual)
 		}
-	})
-
-	t.Run("dequeue then fail segment returns nil", func(t *testing.T) {
-		fn := func(r Record) bool {
-			queue := NewNopQueue()
-			if err := queue.Enqueue(r); err != nil {
-				t.Fatal(err)
-			}
-
-			s, err := queue.Dequeue()
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			_, err = s.Failed(make([]uuid.UUID, 0))
-			return err == nil
-		}
-
-		if err := quick.Check(fn, nil); err != nil {
-			t.Error(err)
-		}
-	})
-
-	t.Run("dequeue then walk returns nil", func(t *testing.T) {
-		fn := func(r Record) bool {
-			queue := NewNopQueue()
-			if err := queue.Enqueue(r); err != nil {
-				t.Fatal(err)
-			}
-
-			s, err := queue.Dequeue()
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			err = s.Walk(func(r Record) error {
-				t.Fatal(errors.New("failed if called"))
-				return nil
-			})
-
-			return err == nil
-		}
-
-		if err := quick.Check(fn, nil); err != nil {
-			t.Error(err)
-		}
-	})
-
-	t.Run("reset", func(t *testing.T) {
-		queue := NewNopQueue()
-		err := queue.Reset()
-
-		if expected, actual := true, err == nil; expected != actual {
-			t.Errorf("expected: %t, actual: %t", expected, actual)
+		if expected, actual := 0, res.Failure; expected != actual {
+			t.Errorf("expected: %d, actual: %d", expected, actual)
 		}
 	})
 }
