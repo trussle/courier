@@ -116,7 +116,7 @@ coverage:
 		courier \
 		/bin/sh -c 'apk update && apk add make && apk add git && \
 		go get github.com/mattn/goveralls && \
-		/go/bin/goveralls -repotoken=${COVERALLS_REPO_TOKEN} -package=./pkg/... -flags=--tags=integration -service=travis-ci'
+		/go/bin/goveralls -repotoken=${COVERALLS_REPO_TOKEN} -ignore=pkg/*/mocks/*.go -package=./pkg/... -flags=--tags=integration -service=travis-ci'
 
 PWD ?= ${GOPATH}/src/${PATH_COURIER}
 TAG ?= dev
