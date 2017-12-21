@@ -7,7 +7,6 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/trussle/courier/pkg/audit"
-	"github.com/trussle/courier/pkg/cache"
 	"github.com/trussle/courier/pkg/consumer/fifo"
 	"github.com/trussle/courier/pkg/http"
 	"github.com/trussle/courier/pkg/metrics"
@@ -31,7 +30,6 @@ type Consumer struct {
 	client             *http.Client
 	queue              queue.Queue
 	log                audit.Log
-	cache              cache.Cache
 	fifo               *fifo.FIFO
 	activeSince        time.Time
 	activeTargetAge    time.Duration
@@ -53,7 +51,6 @@ func New(
 	client *http.Client,
 	queue queue.Queue,
 	log audit.Log,
-	cache cache.Cache,
 	consumedSegments, consumedRecords metrics.Counter,
 	replicatedSegments, replicatedRecords metrics.Counter,
 	failedSegments, failedRecords metrics.Counter,
@@ -64,7 +61,6 @@ func New(
 		client:             client,
 		queue:              queue,
 		log:                log,
-		cache:              cache,
 		activeSince:        time.Time{},
 		activeTargetAge:    defaultActiveTargetAge,
 		activeTargetSize:   defaultActiveTargetSize,
@@ -164,17 +160,6 @@ func (c *Consumer) gather() stateFn {
 		idents[k] = id
 	}
 
-	_, difference, err := c.cache.Intersection(idents)
-	if err != nil {
-		difference = idents
-	}
-
-	for _, unique := range difference {
-		if record, ok := values[unique]; ok {
-			c.fifo.Add(record.ID(), record)
-		}
-	}
-
 	c.activeSince = time.Now()
 
 	c.consumedSegments.Inc()
@@ -268,14 +253,6 @@ func (c *Consumer) commit(values []fifo.KeyValue) error {
 
 	if _, err := c.queue.Commit(txn); err != nil {
 		return err
-	}
-
-	idents := make([]string, len(values))
-	for k, v := range values {
-		idents[k] = v.Value.RecordID()
-	}
-	if err := c.cache.Add(idents); err != nil {
-		warn.Log("state", "commit", "action", "cache", "err", err)
 	}
 
 	return txn.Flush()

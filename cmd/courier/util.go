@@ -12,24 +12,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-type stringslice []string
-
-func (ss *stringslice) Set(s string) error {
-	(*ss) = append(*ss, s)
-	return nil
-}
-
-func (ss *stringslice) Slice() []string {
-	return []string(*ss)
-}
-
-func (ss *stringslice) String() string {
-	if len(*ss) <= 0 {
-		return "..."
-	}
-	return strings.Join(*ss, ", ")
-}
-
 // "udp://host:1234", 80 => udp host:1234 host 1234
 // "host:1234", 80       => tcp host:1234 host 1234
 // "host", 80            => tcp host:80   host 80
@@ -53,49 +35,6 @@ func parseAddr(addr string, defaultPort int) (network, address string, err error
 	}
 
 	return u.Scheme, u.Host, nil
-}
-
-func parseClusterAddr(addr string, defaultPort int) (host string, port int, err error) {
-	var hostAddr string
-	if _, hostAddr, err = parseAddr(addr, defaultPort); err != nil {
-		return
-	}
-
-	var portStr string
-	if host, portStr, err = net.SplitHostPort(hostAddr); err != nil {
-		return
-	}
-	if port, err = strconv.Atoi(portStr); err != nil {
-		return
-	}
-
-	return host, port, nil
-}
-
-func hasNonlocal(peers []string) bool {
-	for _, peer := range peers {
-		if host, _, err := net.SplitHostPort(peer); err == nil {
-			peer = host
-		}
-		if ip := net.ParseIP(peer); ip != nil && !ip.IsLoopback() {
-			return true
-		} else if ip == nil && strings.ToLower(peer) != "localhost" {
-			return true
-		}
-	}
-	return false
-}
-
-func isUnroutable(addr string) bool {
-	if host, _, err := net.SplitHostPort(addr); err == nil {
-		addr = host
-	}
-	if ip := net.ParseIP(addr); ip != nil && (ip.IsUnspecified() || ip.IsLoopback()) {
-		return true // typically 0.0.0.0 or localhost
-	} else if ip == nil && strings.ToLower(addr) == "localhost" {
-		return true
-	}
-	return false
 }
 
 func registerMetrics(mux *http.ServeMux) {

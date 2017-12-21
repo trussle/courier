@@ -15,7 +15,6 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/golang/mock/gomock"
 	auditMocks "github.com/trussle/courier/pkg/audit/mocks"
-	cacheMocks "github.com/trussle/courier/pkg/cache/mocks"
 	"github.com/trussle/courier/pkg/consumer/fifo"
 	"github.com/trussle/courier/pkg/http"
 	metricsMocks "github.com/trussle/courier/pkg/metrics/mocks"
@@ -39,7 +38,6 @@ func TestConsumer(t *testing.T) {
 			client             = http.NewClient(nhttp.DefaultClient, "")
 			queue              = queueMocks.NewMockQueue(ctrl)
 			audit              = auditMocks.NewMockLog(ctrl)
-			cache              = cacheMocks.NewMockCache(ctrl)
 			consumedSegments   = metricsMocks.NewMockCounter(ctrl)
 			consumedRecords    = metricsMocks.NewMockCounter(ctrl)
 			replicatedSegments = metricsMocks.NewMockCounter(ctrl)
@@ -50,7 +48,6 @@ func TestConsumer(t *testing.T) {
 		consumer := New(client,
 			queue,
 			audit,
-			cache,
 			consumedSegments,
 			consumedRecords,
 			replicatedSegments,
@@ -218,7 +215,6 @@ func TestConsumerGather(t *testing.T) {
 			var (
 				queue            = queueMocks.NewMockQueue(ctrl)
 				audit            = auditMocks.NewMockLog(ctrl)
-				cache            = cacheMocks.NewMockCache(ctrl)
 				consumedSegments = metricsMocks.NewMockCounter(ctrl)
 				consumedRecords  = metricsMocks.NewMockCounter(ctrl)
 			)
@@ -226,9 +222,6 @@ func TestConsumerGather(t *testing.T) {
 			queue.EXPECT().Dequeue().Return([]models.Record{
 				record,
 			}, nil)
-			cache.EXPECT().Intersection([]string{
-				record.RecordID(),
-			}).Return(nil, nil, errors.New("bad"))
 			consumedSegments.EXPECT().Inc()
 			consumedRecords.EXPECT().Add(matchers.MatchAnyFloat64())
 
@@ -236,7 +229,6 @@ func TestConsumerGather(t *testing.T) {
 			consumer.waitTime = time.Nanosecond
 			consumer.queue = queue
 			consumer.log = audit
-			consumer.cache = cache
 			consumer.activeTargetSize = 100
 			consumer.consumedSegments = consumedSegments
 			consumer.consumedRecords = consumedRecords
@@ -267,7 +259,6 @@ func TestConsumerGather(t *testing.T) {
 			var (
 				queue            = queueMocks.NewMockQueue(ctrl)
 				audit            = auditMocks.NewMockLog(ctrl)
-				cache            = cacheMocks.NewMockCache(ctrl)
 				consumedSegments = metricsMocks.NewMockCounter(ctrl)
 				consumedRecords  = metricsMocks.NewMockCounter(ctrl)
 			)
@@ -275,9 +266,6 @@ func TestConsumerGather(t *testing.T) {
 			queue.EXPECT().Dequeue().Return([]models.Record{
 				record,
 			}, nil)
-			cache.EXPECT().Intersection([]string{
-				record.RecordID(),
-			})
 			consumedSegments.EXPECT().Inc()
 			consumedRecords.EXPECT().Add(matchers.MatchAnyFloat64())
 
@@ -285,7 +273,6 @@ func TestConsumerGather(t *testing.T) {
 			consumer.waitTime = time.Nanosecond
 			consumer.queue = queue
 			consumer.log = audit
-			consumer.cache = cache
 			consumer.activeTargetSize = 100
 			consumer.consumedSegments = consumedSegments
 			consumer.consumedRecords = consumedRecords
@@ -335,12 +322,10 @@ func TestConsumerReplicate(t *testing.T) {
 			var (
 				queue = queueMocks.NewMockQueue(ctrl)
 				audit = auditMocks.NewMockLog(ctrl)
-				cache = cacheMocks.NewMockCache(ctrl)
 			)
 
 			audit.EXPECT().Append(gomock.Any())
 			queue.EXPECT().Commit(gomock.Any())
-			cache.EXPECT().Add(gomock.Any())
 
 			mux := nhttp.NewServeMux()
 			mux.HandleFunc("/", func(w nhttp.ResponseWriter, r *nhttp.Request) {
@@ -352,7 +337,6 @@ func TestConsumerReplicate(t *testing.T) {
 			consumer := &Consumer{}
 			consumer.log = audit
 			consumer.queue = queue
-			consumer.cache = cache
 			consumer.logger = log.NewNopLogger()
 			consumer.client = http.NewClient(nhttp.DefaultClient, server.URL)
 			consumer.fifo = fifo.NewFIFO(consumer.onElementEviction)
@@ -382,14 +366,12 @@ func TestConsumerReplicate(t *testing.T) {
 			var (
 				queue              = queueMocks.NewMockQueue(ctrl)
 				audit              = auditMocks.NewMockLog(ctrl)
-				cache              = cacheMocks.NewMockCache(ctrl)
 				replicatedSegments = metricsMocks.NewMockCounter(ctrl)
 				replicatedRecords  = metricsMocks.NewMockCounter(ctrl)
 			)
 
 			audit.EXPECT().Append(gomock.Any())
 			queue.EXPECT().Commit(gomock.Any())
-			cache.EXPECT().Add(gomock.Any())
 			replicatedSegments.EXPECT().Inc()
 			replicatedRecords.EXPECT().Add(float64(1))
 
@@ -403,7 +385,6 @@ func TestConsumerReplicate(t *testing.T) {
 			consumer := &Consumer{}
 			consumer.log = audit
 			consumer.queue = queue
-			consumer.cache = cache
 			consumer.logger = log.NewNopLogger()
 			consumer.client = http.NewClient(nhttp.DefaultClient, server.URL)
 			consumer.fifo = fifo.NewFIFO(consumer.onElementEviction)
@@ -516,17 +497,14 @@ func TestConsumerCommit(t *testing.T) {
 			var (
 				queue = queueMocks.NewMockQueue(ctrl)
 				audit = auditMocks.NewMockLog(ctrl)
-				cache = cacheMocks.NewMockCache(ctrl)
 			)
 
 			audit.EXPECT().Append(gomock.Any()).Return(errors.New("bad"))
 			queue.EXPECT().Commit(gomock.Any())
-			cache.EXPECT().Add(gomock.Any())
 
 			consumer := &Consumer{}
 			consumer.log = audit
 			consumer.queue = queue
-			consumer.cache = cache
 			consumer.logger = log.NewNopLogger()
 			consumer.fifo = fifo.NewFIFO(consumer.onElementEviction)
 			consumer.fifo.Add(id, record)
@@ -556,17 +534,14 @@ func TestConsumerCommit(t *testing.T) {
 			var (
 				queue = queueMocks.NewMockQueue(ctrl)
 				audit = auditMocks.NewMockLog(ctrl)
-				cache = cacheMocks.NewMockCache(ctrl)
 			)
 
 			audit.EXPECT().Append(gomock.Any())
 			queue.EXPECT().Commit(gomock.Any())
-			cache.EXPECT().Add(gomock.Any()).Return(errors.New("bad"))
 
 			consumer := &Consumer{}
 			consumer.log = audit
 			consumer.queue = queue
-			consumer.cache = cache
 			consumer.logger = log.NewNopLogger()
 			consumer.fifo = fifo.NewFIFO(consumer.onElementEviction)
 			consumer.fifo.Add(id, record)
@@ -633,17 +608,14 @@ func TestConsumerCommit(t *testing.T) {
 			var (
 				queue = queueMocks.NewMockQueue(ctrl)
 				audit = auditMocks.NewMockLog(ctrl)
-				cache = cacheMocks.NewMockCache(ctrl)
 			)
 
 			audit.EXPECT().Append(gomock.Any())
 			queue.EXPECT().Commit(gomock.Any())
-			cache.EXPECT().Add(gomock.Any())
 
 			consumer := &Consumer{}
 			consumer.log = audit
 			consumer.queue = queue
-			consumer.cache = cache
 			consumer.logger = log.NewNopLogger()
 			consumer.fifo = fifo.NewFIFO(consumer.onElementEviction)
 			consumer.fifo.Add(id, record)
