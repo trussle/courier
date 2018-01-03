@@ -23,9 +23,6 @@ import:
   - package: github.com/SimonRichardson/resilience
   - package: github.com/SimonRichardson/flagset
     version: d8eb0e54974d098768a93de414d268bc2d0a334f
-  - package: github.com/hashicorp/go-sockaddr
-  - package: github.com/hashicorp/memberlist
-  - package: github.com/hashicorp/serf
   - package: github.com/gorilla/mux
   - package: github.com/trussle/fsys
   - package: github.com/trussle/harness
