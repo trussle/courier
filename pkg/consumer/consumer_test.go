@@ -48,6 +48,7 @@ func TestConsumer(t *testing.T) {
 		consumer := New(client,
 			queue,
 			audit,
+			time.Second,
 			consumedSegments,
 			consumedRecords,
 			replicatedSegments,

@@ -38,6 +38,7 @@ const (
 	defaultAWSSQSQueue       = ""
 	defaultAWSFirehoseStream = ""
 
+	defaultConsumerFrequency   = time.Second
 	defaultRecipientURL        = ""
 	defaultNumConsumers        = 2
 	defaultMaxNumberOfMessages = 10
@@ -65,6 +66,7 @@ func runIngest(args []string) error {
 		auditLogRootPath    = flags.String("auditlog.path", defaultAuditLogRootPath, "audit log root directory for the filesystem to use")
 		filesystemType      = flags.String("filesystem", defaultFilesystem, "type of filesystem backing (local, virtual, nop)")
 		recipientURL        = flags.String("recipient.url", defaultRecipientURL, "URL to hit with the message payload")
+		consumerFrequency   = flags.Duration("consumer.frequency", defaultConsumerFrequency, "frequency at which the consumer should run")
 		numConsumers        = flags.Int("num.consumers", defaultNumConsumers, "number of consumers to run at once")
 		maxNumberOfMessages = flags.Int("max.messages", defaultMaxNumberOfMessages, "max number of messages to dequeue at once")
 		visibilityTimeout   = flags.String("visibility.timeout", defaultVisibilityTimeout, "how long the visibility of a message should extended by in seconds")
@@ -264,6 +266,7 @@ func runIngest(args []string) error {
 				h.NewClient(timeoutClient, *recipientURL),
 				consumerQueue,
 				consumerLog,
+				*consumerFrequency,
 				consumedSegments,
 				consumedRecords,
 				replicatedSegments,
