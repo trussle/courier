@@ -31,6 +31,7 @@ type Consumer struct {
 	queue              queue.Queue
 	log                audit.Log
 	fifo               *fifo.FIFO
+	frequency          time.Duration
 	activeSince        time.Time
 	activeTargetAge    time.Duration
 	activeTargetSize   int
@@ -51,6 +52,7 @@ func New(
 	client *http.Client,
 	queue queue.Queue,
 	log audit.Log,
+	frequency time.Duration,
 	consumedSegments, consumedRecords metrics.Counter,
 	replicatedSegments, replicatedRecords metrics.Counter,
 	failedSegments, failedRecords metrics.Counter,
@@ -61,6 +63,7 @@ func New(
 		client:             client,
 		queue:              queue,
 		log:                log,
+		frequency:          frequency,
 		activeSince:        time.Time{},
 		activeTargetAge:    defaultActiveTargetAge,
 		activeTargetSize:   defaultActiveTargetSize,
@@ -84,7 +87,7 @@ func New(
 // Run consumes segments from the queue, and replicates them to the endpoint.
 // Run returns when Stop is invoked.
 func (c *Consumer) Run() {
-	step := time.NewTicker(10 * time.Millisecond)
+	step := time.NewTicker(c.frequency)
 	defer step.Stop()
 
 	state := c.gather
