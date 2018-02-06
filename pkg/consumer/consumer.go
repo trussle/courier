@@ -145,28 +145,21 @@ func (c *Consumer) gather() stateFn {
 		return c.gather
 	}
 
+	level.Debug(c.logger).Log("dequeue", len(records))
+
 	if len(records) == 0 {
 		time.Sleep(c.waitTime)
 		return c.gather
 	}
 
-	// Find if any records have intersected with the cache records.
-	var (
-		values = make(map[string]models.Record)
-		idents = make([]string, len(records))
-	)
-
-	for k, v := range records {
-		id := v.RecordID()
-
-		values[id] = v
-		idents[k] = id
+	for _, v := range records {
+		c.fifo.Add(v.ID(), v)
 	}
 
 	c.activeSince = time.Now()
 
 	c.consumedSegments.Inc()
-	c.consumedRecords.Add(float64(1))
+	c.consumedRecords.Add(float64(len(records)))
 
 	return c.gather
 }

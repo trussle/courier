@@ -83,6 +83,7 @@ func TestConsumerGather(t *testing.T) {
 		consumer := &Consumer{}
 		consumer.gatherErrors = 1
 		consumer.fifo = fifo.NewFIFO(consumer.onElementEviction)
+		consumer.logger = log.NewNopLogger()
 
 		if expected, actual := consumer.gather, consumer.gather(); !funcEquality(expected, actual) {
 			t.Errorf("expected: %T, actual: %T", expected, actual)
@@ -103,6 +104,7 @@ func TestConsumerGather(t *testing.T) {
 			consumer.gatherErrors = 1
 			consumer.fifo = fifo.NewFIFO(consumer.onElementEviction)
 			consumer.fifo.Add(id, record)
+			consumer.logger = log.NewNopLogger()
 
 			if expected, actual := consumer.replicate, consumer.gather(); !funcEquality(expected, actual) {
 				t.Errorf("expected: %T, actual: %T", expected, actual)
@@ -130,6 +132,7 @@ func TestConsumerGather(t *testing.T) {
 			consumer.fifo = fifo.NewFIFO(consumer.onElementEviction)
 			consumer.fifo.Add(id, record)
 			consumer.fifo.Add(id, record)
+			consumer.logger = log.NewNopLogger()
 
 			if expected, actual := consumer.replicate, consumer.gather(); !funcEquality(expected, actual) {
 				t.Errorf("expected: %T, actual: %T", expected, actual)
@@ -160,6 +163,7 @@ func TestConsumerGather(t *testing.T) {
 			consumer.activeTargetSize = 100
 			consumer.fifo = fifo.NewFIFO(consumer.onElementEviction)
 			consumer.fifo.Add(id, record)
+			consumer.logger = log.NewNopLogger()
 
 			if expected, actual := consumer.gather, consumer.gather(); !funcEquality(expected, actual) {
 				t.Errorf("expected: %T, actual: %T", expected, actual)
@@ -191,6 +195,7 @@ func TestConsumerGather(t *testing.T) {
 			consumer.activeTargetSize = 100
 			consumer.fifo = fifo.NewFIFO(consumer.onElementEviction)
 			consumer.fifo.Add(id, record)
+			consumer.logger = log.NewNopLogger()
 
 			if expected, actual := consumer.gather, consumer.gather(); !funcEquality(expected, actual) {
 				t.Errorf("expected: %T, actual: %T", expected, actual)
@@ -235,6 +240,7 @@ func TestConsumerGather(t *testing.T) {
 			consumer.consumedRecords = consumedRecords
 			consumer.fifo = fifo.NewFIFO(consumer.onElementEviction)
 			consumer.fifo.Add(id, record)
+			consumer.logger = log.NewNopLogger()
 
 			if expected, actual := consumer.gather, consumer.gather(); !funcEquality(expected, actual) {
 				t.Errorf("expected: %T, actual: %T", expected, actual)
@@ -279,6 +285,7 @@ func TestConsumerGather(t *testing.T) {
 			consumer.consumedRecords = consumedRecords
 			consumer.fifo = fifo.NewFIFO(consumer.onElementEviction)
 			consumer.fifo.Add(id, record)
+			consumer.logger = log.NewNopLogger()
 
 			if expected, actual := consumer.gather, consumer.gather(); !funcEquality(expected, actual) {
 				t.Errorf("expected: %T, actual: %T", expected, actual)
