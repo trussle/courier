@@ -89,6 +89,10 @@ func (r *remoteLog) Append(txn models.Transaction) error {
 		return err
 	}
 
+	if len(data) == 0 {
+		return nil
+	}
+
 	records := make([]*firehose.Record, len(data))
 	for k, v := range data {
 		records[k] = &firehose.Record{
