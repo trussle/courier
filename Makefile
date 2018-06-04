@@ -13,7 +13,6 @@ all: install
 .PHONY: install
 install:
 	go get github.com/Masterminds/glide
-	go get github.com/mattn/goveralls
 	go get github.com/golang/mock/mockgen
 	go get github.com/prometheus/client_golang/prometheus
 	glide install --strip-vendor
@@ -90,14 +89,6 @@ coverage-tests:
 .PHONY: coverage-view
 coverage-view:
 	go tool cover -html=bin/coverage.out
-
-.PHONY: coverage
-coverage:
-	docker-compose run -e TRAVIS_BRANCH=${TRAVIS_BRANCH} -e GIT_BRANCH=${GIT_BRANCH} \
-		courier \
-		/bin/sh -c 'apk update && apk add make && apk add git && \
-		go get github.com/mattn/goveralls && \
-		/go/bin/goveralls -repotoken=${COVERALLS_REPO_TOKEN} -ignore=pkg/*/mocks/*.go -package=./pkg/... -flags=--tags=integration -service=travis-ci'
 
 PWD ?= ${GOPATH}/src/${PATH_COURIER}
 TAG ?= dev

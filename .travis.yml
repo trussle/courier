@@ -18,16 +18,18 @@ before_install:
 
 install:
   - make
-  - go get github.com/mattn/goveralls
-
+  
 before_script:
+  - curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
+  - chmod +x ./cc-test-reporter
+  - ./cc-test-reporter before-build
   - docker-compose up --build -d
   - sleep 2
 
 script:
   - make integration-tests
   - make documentation
-  - make coverage
+  - make coverage-tests
 
 after_success:
   - export BRANCH=$(if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then echo $TRAVIS_BRANCH; else echo $TRAVIS_PULL_REQUEST_BRANCH; fi)
@@ -35,4 +37,5 @@ after_success:
   - make push-docker
 
 after_script:
+  - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT
   - docker-compose down
