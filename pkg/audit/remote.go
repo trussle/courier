@@ -5,8 +5,6 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/firehose"
 	"github.com/go-kit/kit/log"
@@ -43,12 +41,12 @@ func newRemoteLog(config *RemoteConfig, logger log.Logger) (Log, error) {
 	// static credentials...
 	var creds *credentials.Credentials
 	if config.EC2Role {
-		creds = credentials.NewChainCredentials([]credentials.Provider{
-			&credentials.EnvProvider{},
-			&ec2rolecreds.EC2RoleProvider{
-				Client: ec2metadata.New(session.New()),
-			},
+		var sess = session.New(&aws.Config{
+			LogLevel:                      aws.LogLevel(aws.LogDebug),
+			CredentialsChainVerboseErrors: aws.Bool(true),
+			Region: aws.String(config.Region),
 		})
+		creds = sess.Config.Credentials
 	} else {
 		creds = credentials.NewStaticCredentials(
 			config.ID,
@@ -59,7 +57,6 @@ func newRemoteLog(config *RemoteConfig, logger log.Logger) (Log, error) {
 	if _, err := creds.Get(); err != nil {
 		return nil, errors.Wrap(err, "invalid credentials")
 	}
-
 	var (
 		cfg = aws.NewConfig().
 			WithRegion(config.Region).
