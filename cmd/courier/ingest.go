@@ -193,7 +193,7 @@ func runIngest(args []string) error {
 	timeoutClient := &http.Client{
 		Transport: &http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
-			ResponseHeaderTimeout: 30 * time.Second,
+			ResponseHeaderTimeout: 60 * time.Second,
 			Dial: (&net.Dialer{
 				Timeout:   10 * time.Second,
 				KeepAlive: 30 * time.Second,

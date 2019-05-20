@@ -1,6 +1,6 @@
 PATH_COURIER = github.com/trussle/courier
 
-UNAME_S := $(shell uname -s)
+UNAME_S := teamtrussle
 SED ?= sed -i
 ifeq ($(UNAME_S),Darwin)
 	SED += '' --
@@ -87,8 +87,8 @@ coverage:
 		/go/bin/goveralls -repotoken=${COVERALLS_REPO_TOKEN} -package=./pkg/... -flags=--tags=integration -service=travis-ci'
 
 PWD ?= ${GOPATH}/src/${PATH_COURIER}
-TAG ?= dev
-BRANCH ?= dev
+TAG ?= v0.0.2
+BRANCH ?= v0.0.2
 ifeq ($(BRANCH),master)
 	TAG=latest
 endif
@@ -102,7 +102,7 @@ build-docker:
 .PHONY: push-docker-tag
 push-docker-tag: FORCE
 	@echo "Pushing '${TAG}' for '${BRANCH}'"
-	docker login -u ${DOCKER_HUB_USERNAME} -p ${DOCKER_HUB_PASSWORD}
+	docker login -u teamtrussle
 	docker push teamtrussle/courier:${TAG}
 
 .PHONY: push-docker
