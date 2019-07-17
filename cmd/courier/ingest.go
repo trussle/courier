@@ -35,8 +35,9 @@ const (
 	defaultAWSToken  = ""
 	defaultAWSRegion = "eu-west-1"
 
-	defaultAWSSQSQueue       = ""
-	defaultAWSFirehoseStream = ""
+	defaultAWSSQSQueue               = ""
+	defaultAWSSQSQueueOwnerAccountID = ""
+	defaultAWSFirehoseStream         = ""
 
 	defaultConsumerFrequency   = time.Second
 	defaultRecipientURL        = ""
@@ -54,23 +55,24 @@ func runIngest(args []string) error {
 		debug   = flags.Bool("debug", false, "debug logging")
 		apiAddr = flags.String("api", defaultAPIAddr, "listen address for ingest API")
 
-		awsEC2Role          = flags.Bool("aws.ec2.role", defaultEC2Role, "AWS configuration to use EC2 roles")
-		awsID               = flags.String("aws.id", defaultAWSID, "AWS configuration id")
-		awsSecret           = flags.String("aws.secret", defaultAWSSecret, "AWS configuration secret")
-		awsToken            = flags.String("aws.token", defaultAWSToken, "AWS configuration token")
-		awsRegion           = flags.String("aws.region", defaultAWSRegion, "AWS configuration region")
-		awsSQSQueue         = flags.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
-		awsFirehoseStream   = flags.String("aws.firehose.stream", defaultAWSFirehoseStream, "AWS configuration stream")
-		queueType           = flags.String("queue", defaultQueue, "type of queue to use (remote, virtual, nop)")
-		auditLogType        = flags.String("auditlog", defaultAuditLog, "type of audit log to use (remote, local, nop)")
-		auditLogRootPath    = flags.String("auditlog.path", defaultAuditLogRootPath, "audit log root directory for the filesystem to use")
-		filesystemType      = flags.String("filesystem", defaultFilesystem, "type of filesystem backing (local, virtual, nop)")
-		recipientURL        = flags.String("recipient.url", defaultRecipientURL, "URL to hit with the message payload")
-		consumerFrequency   = flags.Duration("consumer.frequency", defaultConsumerFrequency, "frequency at which the consumer should run")
-		numConsumers        = flags.Int("num.consumers", defaultNumConsumers, "number of consumers to run at once")
-		maxNumberOfMessages = flags.Int("max.messages", defaultMaxNumberOfMessages, "max number of messages to dequeue at once")
-		visibilityTimeout   = flags.String("visibility.timeout", defaultVisibilityTimeout, "how long the visibility of a message should extended by in seconds")
-		metricsRegistration = flags.Bool("metrics.registration", defaultMetricsRegistration, "Registration of metrics on launch")
+		awsEC2Role                = flags.Bool("aws.ec2.role", defaultEC2Role, "AWS configuration to use EC2 roles")
+		awsID                     = flags.String("aws.id", defaultAWSID, "AWS configuration id")
+		awsSecret                 = flags.String("aws.secret", defaultAWSSecret, "AWS configuration secret")
+		awsToken                  = flags.String("aws.token", defaultAWSToken, "AWS configuration token")
+		awsRegion                 = flags.String("aws.region", defaultAWSRegion, "AWS configuration region")
+		awsSQSQueue               = flags.String("aws.sqs.queue", defaultAWSSQSQueue, "AWS configuration queue")
+		awsSQSQueueOwnerAccountID = flags.String("aws.sqs.queue.owner.account.id", defaultAWSSQSQueueOwnerAccountID, "AWS Account ID that the SQS queue belongs to, needed in order to access a queue that are cross-account")
+		awsFirehoseStream         = flags.String("aws.firehose.stream", defaultAWSFirehoseStream, "AWS configuration stream")
+		queueType                 = flags.String("queue", defaultQueue, "type of queue to use (remote, virtual, nop)")
+		auditLogType              = flags.String("auditlog", defaultAuditLog, "type of audit log to use (remote, local, nop)")
+		auditLogRootPath          = flags.String("auditlog.path", defaultAuditLogRootPath, "audit log root directory for the filesystem to use")
+		filesystemType            = flags.String("filesystem", defaultFilesystem, "type of filesystem backing (local, virtual, nop)")
+		recipientURL              = flags.String("recipient.url", defaultRecipientURL, "URL to hit with the message payload")
+		consumerFrequency         = flags.Duration("consumer.frequency", defaultConsumerFrequency, "frequency at which the consumer should run")
+		numConsumers              = flags.Int("num.consumers", defaultNumConsumers, "number of consumers to run at once")
+		maxNumberOfMessages       = flags.Int("max.messages", defaultMaxNumberOfMessages, "max number of messages to dequeue at once")
+		visibilityTimeout         = flags.String("visibility.timeout", defaultVisibilityTimeout, "how long the visibility of a message should extended by in seconds")
+		metricsRegistration       = flags.Bool("metrics.registration", defaultMetricsRegistration, "Registration of metrics on launch")
 	)
 	flags.Usage = usageFor(flags, "ingest [flags]")
 	if err := flags.Parse(args); err != nil {
@@ -212,6 +214,7 @@ func runIngest(args []string) error {
 		queue.WithToken(*awsToken),
 		queue.WithRegion(*awsRegion),
 		queue.WithQueue(*awsSQSQueue),
+		queue.WithQueueOwnerAWSAccountID(*awsSQSQueueOwnerAccountID),
 		queue.WithMaxNumberOfMessages(int64(*maxNumberOfMessages)),
 		queue.WithVisibilityTimeout(visibilityTimeoutDuration),
 	)

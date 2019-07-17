@@ -13,11 +13,12 @@ import (
 )
 
 const (
-	defaultAWSID     = ""
-	defaultAWSSecret = ""
-	defaultAWSToken  = ""
-	defaultAWSRegion = "eu-west-1"
-	defaultAWSQueue  = ""
+	defaultAWSID                  = ""
+	defaultAWSSecret              = ""
+	defaultAWSToken               = ""
+	defaultAWSRegion              = "eu-west-1"
+	defaultAWSQueue               = ""
+	defaultAWSQueueOwnerAccountID = ""
 )
 
 func TestRemoteQueue_Integration(t *testing.T) {
@@ -32,6 +33,7 @@ func TestRemoteQueue_Integration(t *testing.T) {
 		queue.WithSecret(GetEnv("AWS_SECRET", defaultAWSSecret)),
 		queue.WithToken(GetEnv("AWS_TOKEN", defaultAWSToken)),
 		queue.WithQueue(GetEnv("AWS_SQS_QUEUE", defaultAWSQueue)),
+		queue.WithQueueOwnerAWSAccountID(GetEnv("AWS_SQS_QUEUE_OWNER_ACCOUNT_ID", defaultAWSQueueOwnerAccountID)),
 		queue.WithMaxNumberOfMessages(1),
 		queue.WithVisibilityTimeout(time.Second*100),
 	)

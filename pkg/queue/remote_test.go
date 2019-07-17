@@ -12,7 +12,7 @@ func TestConfigBuild(t *testing.T) {
 	t.Parallel()
 
 	t.Run("build", func(t *testing.T) {
-		fn := func(id, secret, token, region, queue string, numOfMessages, timeout int64) bool {
+		fn := func(id, secret, token, region, queue, accountID string, numOfMessages, timeout int64) bool {
 			config, err := BuildConfig(
 				WithEC2Role(false),
 				WithID(id),
@@ -20,6 +20,7 @@ func TestConfigBuild(t *testing.T) {
 				WithToken(token),
 				WithRegion(region),
 				WithQueue(queue),
+				WithQueueOwnerAWSAccountID(accountID),
 				WithMaxNumberOfMessages(numOfMessages),
 				WithVisibilityTimeout(time.Duration(timeout)),
 			)
@@ -31,6 +32,7 @@ func TestConfigBuild(t *testing.T) {
 				config.Token == token &&
 				config.Region == region &&
 				config.Queue == queue &&
+				config.QueueOwnerAWSAccountID == accountID &&
 				config.MaxNumberOfMessages == numOfMessages &&
 				config.VisibilityTimeout == time.Duration(timeout)
 		}

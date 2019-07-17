@@ -16,11 +16,12 @@ import (
 
 // RemoteConfig creates a configuration to create a RemoteQueue.
 type RemoteConfig struct {
-	EC2Role             bool
-	ID, Secret, Token   string
-	Region, Queue       string
-	MaxNumberOfMessages int64
-	VisibilityTimeout   time.Duration
+	EC2Role                bool
+	ID, Secret, Token      string
+	Region, Queue          string
+	QueueOwnerAWSAccountID string
+	MaxNumberOfMessages    int64
+	VisibilityTimeout      time.Duration
 }
 
 type remoteQueue struct {
@@ -42,7 +43,7 @@ func newRemoteQueue(config *RemoteConfig, logger log.Logger) (Queue, error) {
 		var sess = session.New(&aws.Config{
 			LogLevel:                      aws.LogLevel(aws.LogDebug),
 			CredentialsChainVerboseErrors: aws.Bool(true),
-			Region: aws.String(config.Region),
+			Region:                        aws.String(config.Region),
 		})
 		creds = sess.Config.Credentials
 	} else {
@@ -61,13 +62,18 @@ func newRemoteQueue(config *RemoteConfig, logger log.Logger) (Queue, error) {
 			WithRegion(config.Region).
 			WithCredentials(creds).
 			WithCredentialsChainVerboseErrors(true)
-		client = sqs.New(session.New(cfg))
+		client           = sqs.New(session.New(cfg))
+		getQueueURLInput = &sqs.GetQueueUrlInput{
+			QueueName: aws.String(config.Queue),
+		}
 	)
 
+	if config.QueueOwnerAWSAccountID != "" {
+		getQueueURLInput.SetQueueOwnerAWSAccountId(config.QueueOwnerAWSAccountID)
+	}
+
 	// Attempt to get the queueURL
-	queueURL, err := client.GetQueueUrl(&sqs.GetQueueUrlInput{
-		QueueName: aws.String(config.Queue),
-	})
+	queueURL, err := client.GetQueueUrl(getQueueURLInput)
 	if err != nil {
 		return nil, err
 	}
@@ -295,6 +301,15 @@ func WithRegion(region string) ConfigOption {
 func WithQueue(queue string) ConfigOption {
 	return func(config *RemoteConfig) error {
 		config.Queue = queue
+		return nil
+	}
+}
+
+// WithQueueOwnerAWSAccountID adds an QueueOwnerAWSAccountID option to the
+// configuration
+func WithQueueOwnerAWSAccountID(awsAccountID string) ConfigOption {
+	return func(config *RemoteConfig) error {
+		config.QueueOwnerAWSAccountID = awsAccountID
 		return nil
 	}
 }
